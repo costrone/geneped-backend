@@ -1,0 +1,314 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { medicalRecordService } from '../services/firebase';
+import { MedicalRecord, SearchFilters } from '../types';
+import { Search, Filter, Download, Eye, Calendar, User, FileText, Clock } from 'lucide-react';
+
+const RecordHistory: React.FC = () => {
+  const [records, setRecords] = useState<MedicalRecord[]>([]);
+  const [filteredRecords, setFilteredRecords] = useState<MedicalRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<SearchFilters>({});
+
+  useEffect(() => {
+    loadRecords();
+  }, []);
+
+  const applyFilters = useCallback(() => {
+    let filtered = [...records];
+
+    if (filters.name) {
+      filtered = filtered.filter(record =>
+        record.patientName.toLowerCase().includes(filters.name!.toLowerCase())
+      );
+    }
+
+    if (filters.surname) {
+      filtered = filtered.filter(record =>
+        record.patientSurname.toLowerCase().includes(filters.surname!.toLowerCase())
+      );
+    }
+
+    if (filters.dni) {
+      filtered = filtered.filter(record =>
+        record.patientDni.toLowerCase().includes(filters.dni!.toLowerCase())
+      );
+    }
+
+    if (filters.keywords) {
+      filtered = filtered.filter(record =>
+        record.report.toLowerCase().includes(filters.keywords!.toLowerCase())
+      );
+    }
+
+    if (filters.dateFrom) {
+      filtered = filtered.filter(record => {
+        const recordDate = record.createdAt instanceof Date ? record.createdAt : new Date(record.createdAt);
+        return recordDate >= filters.dateFrom!;
+      });
+    }
+
+    if (filters.dateTo) {
+      filtered = filtered.filter(record => {
+        const recordDate = record.createdAt instanceof Date ? record.createdAt : new Date(record.createdAt);
+        return recordDate <= filters.dateTo!;
+      });
+    }
+
+    setFilteredRecords(filtered);
+  }, [records, filters]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [applyFilters]);
+
+  const loadRecords = async () => {
+    try {
+      setLoading(true);
+      const data = await medicalRecordService.getAll();
+      // Convertir timestamps a Date si es necesario
+      const recordsWithDates = data.map(record => ({
+        ...record,
+        createdAt: record.createdAt instanceof Date ? record.createdAt : new Date(record.createdAt),
+        updatedAt: record.updatedAt instanceof Date ? record.updatedAt : new Date(record.updatedAt)
+      }));
+      setRecords(recordsWithDates);
+    } catch (error) {
+      console.error('Error al cargar los registros:', error);
+      setError('Error al cargar los registros');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFilterChange = (key: keyof SearchFilters, value: string | Date | undefined) => {
+    setFilters(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  const clearFilters = () => {
+    setFilters({});
+  };
+
+  const downloadPDF = (record: MedicalRecord) => {
+    // Aquí implementarías la descarga del PDF
+    console.log('Descargando PDF para:', record.id);
+  };
+
+  const viewRecord = (record: MedicalRecord) => {
+    // Aquí implementarías la vista del registro
+    console.log('Viendo registro:', record.id);
+  };
+
+  const formatDate = (date: Date | any) => {
+    if (!date) return 'N/A';
+    const dateObj = date instanceof Date ? date : new Date(date);
+    return dateObj.toLocaleDateString('es-ES');
+  };
+
+  const formatTime = (date: Date | any) => {
+    if (!date) return 'N/A';
+    const dateObj = date instanceof Date ? date : new Date(date);
+    return dateObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-64">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+          <p className="text-pastel-gray-dark">Cargando historiales...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto">
+      <div className="bg-white rounded-2xl shadow-soft overflow-hidden">
+        <div className="bg-gradient-to-r from-pastel-blue to-pastel-blue-light px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-gentle">
+                <FileText className="h-6 w-6 text-primary-600" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-primary-700">Historial de Registros</h2>
+                <p className="text-primary-600 text-sm">
+                  {filteredRecords.length} registros encontrados
+                </p>
+              </div>
+            </div>
+            
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="inline-flex items-center px-4 py-2 border border-white/20 text-sm font-medium rounded-xl text-primary-700 bg-white/90 hover:bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 shadow-gentle hover:shadow-soft"
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Filtros
+            </button>
+          </div>
+        </div>
+
+        {/* Filtros */}
+        {showFilters && (
+          <div className="px-8 py-6 border-b border-pastel-gray-light bg-pastel-gray-light">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-primary-700 mb-2">Nombre</label>
+                <input
+                  type="text"
+                  value={filters.name || ''}
+                  onChange={(e) => handleFilterChange('name', e.target.value || undefined)}
+                  className="w-full px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  placeholder="Buscar por nombre..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-primary-700 mb-2">Apellidos</label>
+                <input
+                  type="text"
+                  value={filters.surname || ''}
+                  onChange={(e) => handleFilterChange('surname', e.target.value || undefined)}
+                  className="w-full px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  placeholder="Buscar por apellidos..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-primary-700 mb-2">DNI</label>
+                <input
+                  type="text"
+                  value={filters.dni || ''}
+                  onChange={(e) => handleFilterChange('dni', e.target.value || undefined)}
+                  className="w-full px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  placeholder="Buscar por DNI..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-primary-700 mb-2">Palabras clave</label>
+                <input
+                  type="text"
+                  value={filters.keywords || ''}
+                  onChange={(e) => handleFilterChange('keywords', e.target.value || undefined)}
+                  className="w-full px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  placeholder="Buscar en el informe..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-primary-700 mb-2">Fecha desde</label>
+                <input
+                  type="date"
+                  value={filters.dateFrom ? filters.dateFrom.toISOString().split('T')[0] : ''}
+                  onChange={(e) => handleFilterChange('dateFrom', e.target.value ? new Date(e.target.value) : undefined)}
+                  className="w-full px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-primary-700 mb-2">Fecha hasta</label>
+                <input
+                  type="date"
+                  value={filters.dateTo ? filters.dateTo.toISOString().split('T')[0] : ''}
+                  onChange={(e) => handleFilterChange('dateTo', e.target.value ? new Date(e.target.value) : undefined)}
+                  className="w-full px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={clearFilters}
+                className="inline-flex items-center px-4 py-2 border border-primary-300 text-sm font-medium rounded-xl text-primary-700 bg-white hover:bg-pastel-gray-light focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200"
+              >
+                Limpiar filtros
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Lista de registros */}
+        <div className="overflow-hidden">
+          {error && (
+            <div className="px-8 py-4 text-red-600 bg-red-50 border-b border-red-200">
+              {error}
+            </div>
+          )}
+
+          {filteredRecords.length === 0 ? (
+            <div className="px-8 py-12 text-center">
+              <Search className="mx-auto h-12 w-12 text-pastel-gray-dark" />
+              <h3 className="mt-2 text-sm font-medium text-primary-700">No se encontraron registros</h3>
+              <p className="mt-1 text-sm text-pastel-gray-dark">
+                {records.length === 0 ? 'No hay registros médicos.' : 'Intenta ajustar los filtros de búsqueda.'}
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-pastel-gray-light">
+              {filteredRecords.map((record) => (
+                <div key={record.id} className="px-8 py-6 hover:bg-pastel-gray-light transition-all duration-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-pastel-blue to-pastel-blue-light rounded-lg flex items-center justify-center">
+                          <User className="h-5 w-5 text-primary-700" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-primary-700">
+                            {record.patientName} {record.patientSurname}
+                          </h3>
+                          <p className="text-sm text-pastel-gray-dark">DNI: {record.patientDni}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-4 text-sm text-pastel-gray-dark mb-3">
+                        <div className="flex items-center space-x-1">
+                          <Calendar className="h-4 w-4" />
+                          <span>{formatDate(record.createdAt)}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Clock className="h-4 w-4" />
+                          <span>{formatTime(record.createdAt)}</span>
+                        </div>
+                      </div>
+                      
+                      <p className="text-sm text-pastel-gray-dark line-clamp-2 leading-relaxed">
+                        {record.report.substring(0, 200)}...
+                      </p>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2 ml-6">
+                      <button
+                        onClick={() => viewRecord(record)}
+                        className="inline-flex items-center px-3 py-2 border border-primary-300 text-sm font-medium rounded-xl text-primary-700 bg-white hover:bg-pastel-gray-light focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200"
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        Ver
+                      </button>
+                      
+                      <button
+                        onClick={() => downloadPDF(record)}
+                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-xl text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200"
+                      >
+                        <Download className="h-4 w-4 mr-1" />
+                        PDF
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default RecordHistory; 
