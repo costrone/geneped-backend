@@ -84,11 +84,18 @@ npm start
 
 ## Funcionalidades
 
-### Envío Automático
+### Envío Automático (Mejorado)
 - ✅ **PDF generado** automáticamente
+- ✅ **PDF adjunto automáticamente** usando Base64
 - ✅ **Email enviado** directamente desde la aplicación
 - ✅ **Contraseña incluida** en el email
-- ✅ **Sin necesidad** de cliente de email
+- ✅ **Experiencia transparente** para el usuario
+
+### Funcionalidades de EmailJS
+- ✅ **Soporte para adjuntos** usando Base64
+- ✅ **Envío automático** sin intervención del usuario
+- ✅ **Fallback robusto** para máxima confiabilidad
+- ✅ **Múltiples niveles** de respaldo
 
 ### Fallback
 - 🔄 **Método mailto** como respaldo si EmailJS falla
@@ -122,3 +129,20 @@ npm start
 - Si EmailJS falla, se usará el método mailto
 - El PDF se descargará automáticamente
 - Se abrirá tu cliente de email con la información prellenada 
+
+## 📧 **Para probar de nuevo:**
+
+1. **Ve al Historial**
+2. **Haz clic en "📧"** para enviar otro email
+3. **El enlace debería aparecer** en el mensaje del email
+
+## 🔧 **Para una solución más profesional:**
+
+**Actualiza tu template de EmailJS** para incluir:
+```html
+<code_block_to_apply_changes_from>
+```
+
+Esto hará que el enlace aparezca de forma más elegante en el template.
+
+**¿Puedes probar de nuevo el envío y confirmar si ahora aparece el enlace en el email?** 

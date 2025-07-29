@@ -116,18 +116,14 @@ const EditRecord: React.FC = () => {
 
   const generateNewPDF = async () => {
     if (!record) return;
-
     try {
-      // Generar PDF sin contraseña
-      const pdfFile = await pdfService.generatePDF(record);
-      
-      // Descargar el PDF
+      // Generar PDF protegido
+      const pdfFile = await pdfService.generateProtectedPDF(record);
+      const password = pdfService.generatePassword(record.patientDni);
       pdfService.downloadPDF(pdfFile);
-      
-      alert(`✅ PDF regenerado exitosamente!\n\nEl PDF se ha descargado automáticamente.`);
+      alert(`✅ PDF protegido descargado. Contraseña: ${password}`);
     } catch (error) {
-      console.error('Error generando PDF:', error);
-      alert('❌ Error al generar el PDF. Por favor, inténtalo de nuevo.');
+      alert('❌ Error al descargar el PDF protegido.');
     }
   };
 

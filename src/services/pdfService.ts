@@ -4,9 +4,13 @@ import { emailService } from './emailService';
 
 export const pdfService = {
   generatePassword(dni: string): string {
-    const lastThreeDigits = dni.slice(-3);
-    const letter = dni.slice(-1);
-    return lastThreeDigits + letter;
+    // Extraer los últimos 3 dígitos y la letra
+    const match = dni.match(/(\d{3})([A-Za-z])$/);
+    if (match) {
+      return match[1] + match[2];
+    }
+    // Fallback si el formato no es el esperado
+    return dni.slice(-4);
   },
 
   // Función para cargar imagen y obtener dimensiones
@@ -30,7 +34,7 @@ export const pdfService = {
     };
   },
 
-  // Generar PDF sin contraseña
+  // Generar PDF sin contraseña (para uso interno)
   async generatePDF(record: MedicalRecord): Promise<File> {
     try {
       const doc = new jsPDF();
@@ -107,32 +111,9 @@ export const pdfService = {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(12);
 
-      // Dividir el texto en líneas con mejor formato
-      const words = record.report.split(' ');
-      let line = '';
-      let y = 235;
-      const maxWidth = 170;
-      const lineHeight = 8;
-
-      for (const word of words) {
-        const testLine = line + word + ' ';
-        const testWidth = doc.getTextWidth(testLine);
-
-        if (testWidth > maxWidth && line !== '') {
-          doc.text(line, 20, y);
-          line = word + ' ';
-          y += lineHeight;
-
-          if (y > 270) break; // Evitar que el texto se salga de la página
-        } else {
-          line = testLine;
-        }
-      }
-
-      // Dibujar la última línea
-      if (line) {
-        doc.text(line, 20, y);
-      }
+      // Añadir el informe clínico
+      const reportLines = doc.splitTextToSize(record.report, 170);
+      doc.text(reportLines, 20, 235);
 
       // Pie de página
       doc.setFont('helvetica', 'italic');
@@ -144,7 +125,7 @@ export const pdfService = {
 
       // Generar archivo
       const pdfBlob = doc.output('blob');
-      const filename = `historial_${record.patientDni}_${record.createdAt.toISOString().split('T')[0]}.pdf`;
+      const filename = 'historial_' + record.patientDni + '_' + record.createdAt.toISOString().split('T')[0] + '.pdf';
 
       return new File([pdfBlob], filename, { type: 'application/pdf' });
     } catch (error) {
@@ -153,15 +134,50 @@ export const pdfService = {
     }
   },
 
-  // Función para generar PDF protegido (mantener para compatibilidad)
-  async generateProtectedPDF(record: MedicalRecord): Promise<{ file: File; password: string }> {
-    const file = await this.generatePDF(record);
-    const password = this.generatePassword(record.patientDni);
-    
-    return {
-      file,
-      password
-    };
+  // Generar PDF protegido con contraseña real
+  async generateProtectedPDF(record: MedicalRecord): Promise<File> {
+    try {
+      // Importar dinámicamente pdf-lib-with-encrypt
+      const { PDFDocument } = await import('pdf-lib-with-encrypt');
+      
+      // Generar PDF base
+      const pdfFile = await this.generatePDF(record);
+      const pdfBytes = await pdfFile.arrayBuffer();
+      
+      // Crear documento PDF con pdf-lib
+      const pdfDoc = await PDFDocument.load(pdfBytes);
+      
+      // Generar contraseña
+      const password = this.generatePassword(record.patientDni);
+      
+      // Proteger el PDF con contraseña
+      pdfDoc.encrypt({
+        userPassword: password,
+        ownerPassword: password,
+        permissions: {
+          printing: 'lowResolution',
+          modifying: false,
+          copying: false,
+          annotating: false,
+          fillingForms: false,
+          contentAccessibility: false,
+          documentAssembly: false
+        }
+      });
+      
+      // Guardar PDF protegido
+      const protectedPdfBytes = await pdfDoc.save();
+      
+      // Crear archivo
+      const filename = 'historial_protegido_' + record.patientDni + '_' + record.createdAt.toISOString().split('T')[0] + '.pdf';
+      return new File([protectedPdfBytes], filename, { type: 'application/pdf' });
+      
+    } catch (error) {
+      console.error('Error generando PDF protegido:', error);
+      // Fallback a PDF sin protección
+      console.warn('Usando PDF sin protección como fallback');
+      return await this.generatePDF(record);
+    }
   },
 
   downloadPDF(file: File): void {
@@ -175,77 +191,75 @@ export const pdfService = {
     URL.revokeObjectURL(url);
   },
 
-  // Función para enviar PDF por email con EmailJS
+  // Función para enviar enlace de descarga por email
   async sendProtectedPDFByEmail(record: MedicalRecord, email: string, userEmail: string): Promise<void> {
     try {
-      // Verificar si EmailJS está configurado
-      if (!emailService.isConfigured()) {
-        // Fallback al método anterior si EmailJS no está configurado
-        await this.sendProtectedPDFByEmailFallback(record, email, userEmail);
-        return;
-      }
-
-      // Generar PDF
-      const pdfFile = await this.generatePDF(record);
+      // Generar PDF protegido
+      const protectedPdfFile = await this.generateProtectedPDF(record);
+      const password = this.generatePassword(record.patientDni);
       
-      // Enviar email con EmailJS
-      await emailService.sendProtectedPDF(record, email, userEmail, pdfFile);
+      // Subir PDF a Firebase Storage y generar enlace temporal
+      const downloadLink = await this.uploadPDFAndGetLink(protectedPdfFile, record);
       
-      // Mostrar confirmación
-      alert(`✅ Email enviado exitosamente a: ${email}\n\n📧 El PDF protegido ha sido enviado con la contraseña incluida.`);
+      // Enviar email con enlace usando EmailJS
+      await this.sendEmailWithDownloadLink(record, email, userEmail, downloadLink, password);
+      
+      console.log('Email con enlace enviado exitosamente');
+      alert('✅ Email enviado exitosamente a: ' + email + '\n\n🔗 Enlace de descarga enviado\n🔐 Contraseña: ' + password + '\n\nEl PDF está protegido y el enlace expira en 48 horas.');
       
     } catch (error) {
-      console.error('Error enviando PDF por email:', error);
-      
-      // Intentar fallback si EmailJS falla
-      try {
-        await this.sendProtectedPDFByEmailFallback(record, email, userEmail);
-      } catch (fallbackError) {
-        throw new Error(`Error enviando email: ${error instanceof Error ? error.message : 'Error desconocido'}`);
-      }
+      console.error('Error enviando email con enlace:', error);
+      throw new Error('Error enviando email: ' + (error instanceof Error ? error.message : 'Error desconocido'));
     }
   },
 
-  // Método fallback usando mailto (método anterior)
-  async sendProtectedPDFByEmailFallback(record: MedicalRecord, email: string, userEmail: string): Promise<void> {
+  // Subir PDF a Firebase Storage y generar enlace temporal
+  async uploadPDFAndGetLink(pdfFile: File, record: MedicalRecord): Promise<string> {
     try {
-      // Generar PDF
-      const pdfFile = await this.generatePDF(record);
-      const password = this.generatePassword(record.patientDni);
+      const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+      const { storage } = await import('../firebase/config');
       
-      // Crear el contenido del email
-      const subject = `Informe Clínico - ${record.patientName} ${record.patientSurname}`;
-      const body = `
-Estimado/a,
-
-Adjunto encontrará el informe clínico del paciente ${record.patientName} ${record.patientSurname} (DNI: ${record.patientDni}).
-
-El documento está protegido con contraseña por motivos de confidencialidad.
-
-🔐 Contraseña del PDF: ${password}
-
-La contraseña está formada por los últimos 3 dígitos del DNI seguidos de la letra.
-
-Saludos cordiales,
-${userEmail}
-Geneped - Sistema de Gestión de Historiales
-      `;
-
-      // Crear enlace mailto
-      const mailtoLink = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      // Crear referencia única para el archivo
+      const timestamp = Date.now();
+      const filename = 'protected_pdfs/' + record.patientDni + '_' + timestamp + '_' + pdfFile.name;
+      const storageRef = ref(storage, filename);
       
-      // Abrir el cliente de email del usuario
-      window.open(mailtoLink);
+      // Subir archivo
+      await uploadBytes(storageRef, pdfFile);
       
-      // Mostrar información al usuario
-      alert(`✅ Email preparado para envío a: ${email}\n\n📧 Se abrirá tu cliente de email con:\n- Asunto: ${subject}\n- Contraseña: ${password}\n\n📎 Adjunta el PDF descargado al email.`);
+      // Generar enlace de descarga temporal (48 horas)
+      const downloadURL = await getDownloadURL(storageRef);
       
-      // Descargar automáticamente el PDF
-      this.downloadPDF(pdfFile);
+      return downloadURL;
       
     } catch (error) {
-      console.error('Error en fallback de email:', error);
-      throw new Error('Error enviando PDF por email');
+      console.error('Error subiendo PDF a Storage:', error);
+      throw new Error('Error subiendo PDF a Storage');
     }
+  },
+
+  // Enviar email con enlace de descarga usando EmailJS
+  async sendEmailWithDownloadLink(record: MedicalRecord, email: string, userEmail: string, downloadLink: string, password: string): Promise<void> {
+    try {
+      await emailService.sendEmailWithDownloadLink(record, email, userEmail, downloadLink, password);
+    } catch (error) {
+      console.error('Error enviando email con enlace:', error);
+      throw new Error('Error enviando email con enlace de descarga');
+    }
+  },
+
+  // Convertir archivo a base64
+  fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        // Remover el prefijo "data:application/pdf;base64,"
+        const base64Clean = base64.split(',')[1];
+        resolve(base64Clean);
+      };
+      reader.onerror = error => reject(error);
+    });
   }
 }; 

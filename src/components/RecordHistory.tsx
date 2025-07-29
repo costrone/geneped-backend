@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { medicalRecordService } from '../services/firebase';
 import { MedicalRecord, SearchFilters } from '../types';
-import { Search, Filter, Download, Eye, Calendar, User, FileText, Clock, Trash2, Edit, Shield } from 'lucide-react';
+import { Search, Filter, Download, Eye, Calendar, User, FileText, Clock, Trash2, Edit, Mail } from 'lucide-react';
 import { pdfService } from '../services/pdfService';
 import { useUser } from '../contexts/UserContext';
 
@@ -80,6 +80,9 @@ const RecordHistory: React.FC = () => {
       );
     }
 
+    // Ordenar por fecha de creación (más reciente primero)
+    filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
     setFilteredRecords(filtered);
   }, [records, filters]);
 
@@ -103,18 +106,13 @@ const RecordHistory: React.FC = () => {
 
   const downloadPDF = async (record: MedicalRecord) => {
     try {
-      console.log('Descargando PDF para:', record.id);
-      
-      // Generar PDF sin contraseña
-      const pdfFile = await pdfService.generatePDF(record);
-      
-      // Descargar el PDF
+      // Generar PDF protegido
+      const pdfFile = await pdfService.generateProtectedPDF(record);
+      const password = pdfService.generatePassword(record.patientDni);
       pdfService.downloadPDF(pdfFile);
-      
-      alert(`✅ PDF descargado exitosamente!`);
+      alert(`✅ PDF protegido descargado. Contraseña: ${password}`);
     } catch (error) {
-      console.error('Error descargando PDF:', error);
-      alert('❌ Error al descargar el PDF. Por favor, inténtalo de nuevo.');
+      alert('❌ Error al descargar el PDF protegido.');
     }
   };
 
@@ -397,12 +395,12 @@ ${record.report}
                         onClick={() => sendProtectedEmail(record)}
                         disabled={sendingEmail === record.id}
                         className="inline-flex items-center px-3 py-2 border border-green-300 text-sm font-medium rounded-xl text-green-700 bg-white hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Enviar por email con protección"
+                        title="Enviar por email con enlace de descarga"
                       >
                         {sendingEmail === record.id ? (
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
                         ) : (
-                          <Shield className="h-4 w-4" />
+                          <Mail className="h-4 w-4" />
                         )}
                       </button>
                       

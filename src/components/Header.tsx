@@ -58,17 +58,7 @@ const Header: React.FC = () => {
                 <Trash2 className="h-4 w-4" />
                 <span>Papelera</span>
               </Link>
-              <Link
-                to="/test-firebase"
-                className={`flex items-center space-x-2 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  location.pathname === '/test-firebase'
-                    ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-gentle'
-                    : 'text-pastel-gray-dark hover:text-blue-600 hover:bg-blue-50'
-                }`}
-              >
-                <span>🔧</span>
-                <span>Test Firebase</span>
-              </Link>
+
             </nav>
           </div>
 

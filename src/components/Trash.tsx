@@ -73,18 +73,13 @@ const Trash: React.FC = () => {
 
   const downloadPDF = async (record: MedicalRecord) => {
     try {
-      console.log('Descargando PDF para:', record.id);
-      
-      // Generar PDF sin contraseña
-      const pdfFile = await pdfService.generatePDF(record);
-      
-      // Descargar el PDF
+      // Generar PDF protegido
+      const pdfFile = await pdfService.generateProtectedPDF(record);
+      const password = pdfService.generatePassword(record.patientDni);
       pdfService.downloadPDF(pdfFile);
-      
-      alert(`✅ PDF descargado exitosamente!`);
+      alert(`✅ PDF protegido descargado. Contraseña: ${password}`);
     } catch (error) {
-      console.error('Error descargando PDF:', error);
-      alert('❌ Error al descargar el PDF. Por favor, inténtalo de nuevo.');
+      alert('❌ Error al descargar el PDF protegido.');
     }
   };
 

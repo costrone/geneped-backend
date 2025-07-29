@@ -8,7 +8,7 @@ import RecordHistory from './components/RecordHistory';
 import Trash from './components/Trash';
 import EditRecord from './components/EditRecord';
 import Header from './components/Header';
-import FirebaseTest from './components/FirebaseTest';
+
 import { useAutoCleanup } from './hooks/useAutoCleanup';
 import { emailService } from './services/emailService';
 
@@ -32,7 +32,7 @@ function AppContent() {
             <Route path="/history" element={<PrivateRoute><RecordHistory /></PrivateRoute>} />
             <Route path="/trash" element={<PrivateRoute><Trash /></PrivateRoute>} />
             <Route path="/edit/:id" element={<PrivateRoute><EditRecord /></PrivateRoute>} />
-            <Route path="/test-firebase" element={<FirebaseTest />} />
+
           </Routes>
         </main>
       </div>

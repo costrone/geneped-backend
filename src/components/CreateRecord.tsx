@@ -62,20 +62,17 @@ const CreateRecord: React.FC = () => {
 
       const recordId = await medicalRecordService.create(record);
 
-      // Generar PDF sin contraseña
-      const pdfFile = await pdfService.generatePDF({
+      // Generar PDF protegido
+      const pdfFile = await pdfService.generateProtectedPDF({
         ...record,
         id: recordId,
         createdAt: new Date(),
         updatedAt: new Date()
       });
-
-      setGeneratedPDF(pdfFile);
       
-      // Descargar automáticamente
+      const password = record.password;
       pdfService.downloadPDF(pdfFile);
-      
-      alert(`✅ PDF generado exitosamente!\n\nEl PDF se ha descargado automáticamente.`);
+      alert(`✅ Documento generado y protegido con contraseña: ${password}`);
       setSuccess(true);
       reset();
     } catch (error) {
