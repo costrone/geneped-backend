@@ -28,9 +28,7 @@ const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 const pdf_lib_1 = require("pdf-lib");
 admin.initializeApp();
-exports.generateProtectedPDF = functions
-    .region('europe-west1')
-    .https.onCall(async (data, context) => {
+exports.generateProtectedPDF = functions.https.onCall(async (data, context) => {
     // Verificar autenticación
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'Usuario no autenticado');

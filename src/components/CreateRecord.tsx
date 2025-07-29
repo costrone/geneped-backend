@@ -11,7 +11,9 @@ const schema = yup.object({
   name: yup.string().required('El nombre es obligatorio'),
   surname: yup.string().required('Los apellidos son obligatorios'),
   dni: yup.string().required('El DNI es obligatorio').matches(/^\d{8}[A-Z]$/, 'DNI debe tener 8 dígitos y una letra'),
-  report: yup.string().required('El informe es obligatorio').min(10, 'El informe debe tener al menos 10 caracteres')
+  birthDate: yup.string().required('La fecha de nacimiento es obligatoria'),
+  reportType: yup.string().oneOf(['Geneped', 'Medicaes'], 'Debe seleccionar un tipo de informe').required('El tipo de informe es obligatorio'),
+  report: yup.string().required('El informe clínico es obligatorio').min(10, 'El informe clínico debe tener al menos 10 caracteres')
 }).required();
 
 type FormData = yup.InferType<typeof schema>;
@@ -42,7 +44,8 @@ const CreateRecord: React.FC = () => {
       const patientId = await patientService.create({
         name: data.name,
         surname: data.surname,
-        dni: data.dni
+        dni: data.dni,
+        birthDate: data.birthDate
       });
 
       // Crear el historial médico
@@ -51,14 +54,16 @@ const CreateRecord: React.FC = () => {
         patientName: data.name,
         patientSurname: data.surname,
         patientDni: data.dni,
+        patientBirthDate: data.birthDate,
+        reportType: data.reportType,
         report: data.report,
         password: pdfService.generatePassword(data.dni)
       };
 
       const recordId = await medicalRecordService.create(record);
 
-      // Generar PDF protegido
-      const { file: pdfFile, password } = await pdfService.generateProtectedPDF({
+      // Generar PDF sin contraseña
+      const pdfFile = await pdfService.generatePDF({
         ...record,
         id: recordId,
         createdAt: new Date(),
@@ -66,7 +71,11 @@ const CreateRecord: React.FC = () => {
       });
 
       setGeneratedPDF(pdfFile);
-      alert(`PDF generado con contraseña: ${password}`);
+      
+      // Descargar automáticamente
+      pdfService.downloadPDF(pdfFile);
+      
+      alert(`✅ PDF generado exitosamente!\n\nEl PDF se ha descargado automáticamente.`);
       setSuccess(true);
       reset();
     } catch (error) {
@@ -101,7 +110,7 @@ const CreateRecord: React.FC = () => {
             <div>
               <h2 className="text-2xl font-bold text-primary-700">Nuevo Historial Médico</h2>
               <p className="text-primary-600 text-sm">
-                Introduce los datos del paciente y redacta el informe médico
+                Introduce los datos del paciente y redacta el informe clínico
               </p>
             </div>
           </div>
@@ -114,8 +123,8 @@ const CreateRecord: React.FC = () => {
               <User className="h-5 w-5 text-primary-600" />
               <h3 className="text-lg font-semibold text-primary-700">Datos del Paciente</h3>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-primary-700 mb-2">
                   Nombre *
@@ -164,7 +173,6 @@ const CreateRecord: React.FC = () => {
                   {...register('dni')}
                   className="w-full px-4 py-3 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
                   placeholder="12345678A"
-                  maxLength={9}
                 />
                 {errors.dni && (
                   <p className="mt-2 text-sm text-red-600 flex items-center space-x-1">
@@ -173,26 +181,91 @@ const CreateRecord: React.FC = () => {
                   </p>
                 )}
               </div>
+
+              <div>
+                <label htmlFor="birthDate" className="block text-sm font-medium text-primary-700 mb-2">
+                  Fecha de Nacimiento *
+                </label>
+                <input
+                  type="date"
+                  id="birthDate"
+                  {...register('birthDate')}
+                  className="w-full px-4 py-3 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                />
+                {errors.birthDate && (
+                  <p className="mt-2 text-sm text-red-600 flex items-center space-x-1">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>{errors.birthDate.message}</span>
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Informe médico */}
+          {/* Tipo de informe */}
+          <div className="bg-pastel-gray-light rounded-xl p-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <Shield className="h-5 w-5 text-primary-600" />
+              <h3 className="text-lg font-semibold text-primary-700">Tipo de Informe</h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="flex items-center space-x-3 p-4 border border-pastel-gray-light rounded-xl cursor-pointer hover:bg-white transition-all duration-200">
+                  <input
+                    type="radio"
+                    value="Geneped"
+                    {...register('reportType')}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-pastel-gray-light"
+                  />
+                  <div className="flex items-center space-x-3">
+                    <img src="/logo.png" alt="Geneped" className="w-8 h-8 object-contain" />
+                    <span className="text-sm font-medium text-primary-700">Geneped</span>
+                  </div>
+                </label>
+              </div>
+
+              <div>
+                <label className="flex items-center space-x-3 p-4 border border-pastel-gray-light rounded-xl cursor-pointer hover:bg-white transition-all duration-200">
+                  <input
+                    type="radio"
+                    value="Medicaes"
+                    {...register('reportType')}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-pastel-gray-light"
+                  />
+                  <div className="flex items-center space-x-3">
+                    <img src="/medicaes.png" alt="Medicaes" className="w-8 h-8 object-contain" />
+                    <span className="text-sm font-medium text-primary-700">Medicaes</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {errors.reportType && (
+              <p className="mt-2 text-sm text-red-600 flex items-center space-x-1">
+                <AlertCircle className="h-4 w-4" />
+                <span>{errors.reportType.message}</span>
+              </p>
+            )}
+          </div>
+
+          {/* Informe clínico */}
           <div className="bg-pastel-gray-light rounded-xl p-6">
             <div className="flex items-center space-x-2 mb-4">
               <FileText className="h-5 w-5 text-primary-600" />
-              <h3 className="text-lg font-semibold text-primary-700">Informe Médico</h3>
+              <h3 className="text-lg font-semibold text-primary-700">Informe Clínico</h3>
             </div>
-            
+
             <div>
               <label htmlFor="report" className="block text-sm font-medium text-primary-700 mb-2">
-                Informe Médico *
+                Informe Clínico *
               </label>
               <textarea
                 id="report"
-                rows={12}
                 {...register('report')}
+                rows={8}
                 className="w-full px-4 py-3 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 resize-none"
-                placeholder="Redacta aquí el informe médico completo..."
+                placeholder="Redacta el informe clínico detallado del paciente..."
               />
               {errors.report && (
                 <p className="mt-2 text-sm text-red-600 flex items-center space-x-1">
@@ -203,50 +276,45 @@ const CreateRecord: React.FC = () => {
             </div>
           </div>
 
-          {/* Mensajes de estado */}
-          {error && (
-            <div className="flex items-center space-x-3 p-4 bg-red-50 border border-red-200 rounded-xl">
-              <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
-              <span className="text-red-700">{error}</span>
-            </div>
-          )}
-
-          {success && (
-            <div className="flex items-center space-x-3 p-4 bg-green-50 border border-green-200 rounded-xl">
-              <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
-              <span className="text-green-700">Historial creado exitosamente</span>
-            </div>
-          )}
-
           {/* Botones */}
-          <div className="flex justify-between items-center pt-6 border-t border-pastel-gray-light">
-            <div className="flex items-center space-x-2 text-sm text-pastel-gray-dark">
-              <Shield className="h-4 w-4" />
-              <span>El PDF se generará con protección de contraseña</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              {success && (
+                <div className="flex items-center space-x-2 text-green-600">
+                  <CheckCircle className="h-5 w-5" />
+                  <span className="text-sm font-medium">Historial creado exitosamente</span>
+                </div>
+              )}
+              {error && (
+                <div className="flex items-center space-x-2 text-red-600">
+                  <AlertCircle className="h-5 w-5" />
+                  <span className="text-sm font-medium">{error}</span>
+                </div>
+              )}
             </div>
-            
-            <div className="flex space-x-4">
+
+            <div className="flex items-center space-x-3">
               {generatedPDF && (
                 <button
                   type="button"
                   onClick={downloadPDF}
-                  className="inline-flex items-center px-6 py-3 border border-primary-300 text-sm font-medium rounded-xl text-primary-700 bg-white hover:bg-pastel-gray-light focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 shadow-gentle hover:shadow-soft"
+                  className="inline-flex items-center px-4 py-2 border border-primary-300 text-sm font-medium rounded-xl text-primary-700 bg-white hover:bg-pastel-gray-light focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200"
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Descargar PDF
                 </button>
               )}
-              
+
               <button
                 type="submit"
                 disabled={loading}
                 className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-xl text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-gentle hover:shadow-soft"
               >
                 {loading ? (
-                  <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>Generando...</span>
-                  </div>
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Generando...
+                  </>
                 ) : (
                   <>
                     <FileText className="h-4 w-4 mr-2" />

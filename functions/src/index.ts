@@ -4,9 +4,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 admin.initializeApp();
 
-export const generateProtectedPDF = functions
-  .region('europe-west1')
-  .https.onCall(async (data, context) => {
+export const generateProtectedPDF = functions.https.onCall(async (data, context) => {
   // Verificar autenticación
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'Usuario no autenticado');
