@@ -64,11 +64,11 @@ export const pdfService = {
         doc.addImage('/Medicaes.png', 'PNG', logoX, 20, logoWidth, logoHeight);
       }
 
-      // Encabezado en negrita debajo del logo
+      // Encabezado en negrita más cerca del logo
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(18);
-      doc.text('GENÉTICA MÉDICA Y ASESORAMIENTO GENÉTICO', 105, 90, { align: 'center' });
-      doc.text('INFORME CLÍNICO', 105, 100, { align: 'center' });
+      doc.text('GENÉTICA MÉDICA Y ASESORAMIENTO GENÉTICO', 105, 50, { align: 'center' });
+      doc.text('INFORME CLÍNICO', 105, 85, { align: 'center' });
 
       // Fecha de generación (solo la fecha, alineada a la derecha)
       doc.setFont('helvetica', 'normal');
@@ -78,44 +78,96 @@ export const pdfService = {
         month: 'long',
         day: 'numeric'
       });
-      doc.text(currentDate, 190, 115, { align: 'right' });
+      doc.text(currentDate, 190, 95, { align: 'right' });
 
       // Línea separadora decorativa
       doc.setDrawColor(100, 100, 100);
-      doc.line(20, 125, 190, 125);
+      doc.line(20, 105, 190, 105);
       doc.setDrawColor(0, 0, 0);
 
       // Datos del paciente con formato profesional
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(14);
-      doc.text('DATOS DEL PACIENTE', 20, 145);
+      doc.text('DATOS DEL PACIENTE', 20, 125);
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(12);
 
       // Cuadro de datos del paciente
       doc.setFillColor(245, 245, 245);
-      doc.rect(20, 150, 170, 50, 'F');
+      doc.rect(20, 130, 170, 50, 'F');
       doc.setFillColor(255, 255, 255);
 
-      doc.text(`Nombre completo: ${record.patientName} ${record.patientSurname}`, 25, 160);
-      doc.text(`DNI: ${record.patientDni}`, 25, 170);
-      doc.text(`Fecha de nacimiento: ${new Date(record.patientBirthDate).toLocaleDateString('es-ES')}`, 25, 180);
-      doc.text(`Fecha del informe: ${record.createdAt.toLocaleDateString('es-ES')}`, 25, 190);
+      doc.text(`Nombre completo: ${record.patientName} ${record.patientSurname}`, 25, 140);
+      doc.text(`DNI: ${record.patientDni}`, 25, 150);
+      doc.text(`Fecha de nacimiento: ${new Date(record.patientBirthDate).toLocaleDateString('es-ES')}`, 25, 160);
+      doc.text(`Fecha del informe: ${record.createdAt.toLocaleDateString('es-ES')}`, 25, 170);
 
       // Informe clínico con formato profesional
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(14);
-      doc.text('INFORME CLÍNICO', 20, 220);
+      doc.text('INFORME CLÍNICO', 20, 200);
 
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(12);
+      doc.setFont('times', 'normal');
+      doc.setFontSize(11);
 
-      // Añadir el informe clínico
+      // Añadir el informe clínico con paginación automática
       const reportLines = doc.splitTextToSize(record.report, 170);
-      doc.text(reportLines, 20, 235);
-
-      // Pie de página
+      
+      // Función para añadir texto con paginación automática y formato Times New Roman
+      const addTextWithPagination = (text: string[], startY: number) => {
+        let currentY = startY;
+        const lineHeight = 5; // Espaciado sencillo (reducido de 8 a 5)
+        const maxY = 270; // Altura máxima antes de nueva página
+        
+        // Configurar fuente Times New Roman para el texto del informe
+        doc.setFont('times', 'normal');
+        doc.setFontSize(11);
+        
+        for (let i = 0; i < text.length; i++) {
+          const line = text[i];
+          
+          // Si no hay espacio suficiente en la página actual, crear nueva página
+          if (currentY + lineHeight > maxY) {
+            doc.addPage();
+            currentY = 20; // Comenzar desde arriba en la nueva página
+            
+            // Añadir encabezado en páginas adicionales
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.text('INFORME CLÍNICO - Continuación', 20, 15);
+            doc.setFont('times', 'normal');
+            doc.setFontSize(11);
+            currentY = 25; // Espacio después del encabezado
+          }
+          
+          // Aplicar justificación al texto
+          const words = line.split(' ');
+          if (words.length > 1) {
+            // Calcular espaciado para justificación
+            const lineWidth = doc.getTextWidth(line);
+            const spaceWidth = (170 - lineWidth) / (words.length - 1);
+            let xPos = 20;
+            
+            for (const word of words) {
+              doc.text(word, xPos, currentY);
+              xPos += doc.getTextWidth(word) + spaceWidth;
+            }
+          } else {
+            // Línea con una sola palabra, alinear a la izquierda
+            doc.text(line, 20, currentY);
+          }
+          
+          currentY += lineHeight;
+        }
+        
+        return currentY; // Retornar la posición Y final para el pie de página
+      };
+      
+      // Añadir el informe con paginación
+      addTextWithPagination(reportLines, 215);
+      
+      // Pie de página en la última página
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(10);
       doc.setDrawColor(200, 200, 200);
