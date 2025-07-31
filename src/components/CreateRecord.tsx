@@ -2,22 +2,20 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import { medicalRecordService, patientService, storageService } from '../services/firebase';
-import { pdfService } from '../services/pdfService';
-import { MedicalRecord } from '../types';
-import { FileText, Download, AlertCircle, CheckCircle, User, Shield, Upload, X, File, TestTube, Receipt, CreditCard, Lock } from 'lucide-react';
+import { FileText, Download, AlertCircle, CheckCircle, User, Shield, Upload, X, File, TestTube } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
+import { patientService, medicalRecordService, storageService } from '../services/firebase';
+import { pdfService } from '../services/pdfService';
+import RichTextEditor from './RichTextEditor';
 
 const schema = yup.object({
-  name: yup.string().required('El nombre es obligatorio'),
-  surname: yup.string().required('Los apellidos son obligatorios'),
-  dni: yup.string().required('El DNI es obligatorio').matches(/^\d{8}[A-Z]$/, 'DNI debe tener 8 dígitos y una letra'),
+  name: yup.string().required('El nombre es obligatorio').min(2, 'El nombre debe tener al menos 2 caracteres'),
+  surname: yup.string().required('El apellido es obligatorio').min(2, 'El apellido debe tener al menos 2 caracteres'),
+  dni: yup.string().required('El DNI es obligatorio').matches(/^\d{8}[A-Z]$/, 'El DNI debe tener 8 números y una letra'),
   birthDate: yup.string().required('La fecha de nacimiento es obligatoria'),
   reportType: yup.string().oneOf(['Geneped', 'Medicaes'], 'Debe seleccionar un tipo de informe').required('El tipo de informe es obligatorio'),
   report: yup.string().required('El informe clínico es obligatorio').min(10, 'El informe clínico debe tener al menos 10 caracteres'),
-  requestedTests: yup.string().optional(),
-  invoiceIssued: yup.boolean().optional(),
-  paid: yup.boolean().optional()
+  requestedTests: yup.string().optional().nullable()
 }).required();
 
 type FormData = yup.InferType<typeof schema>;
@@ -29,7 +27,6 @@ const CreateRecord: React.FC = () => {
   const [error, setError] = useState('');
   const [generatedPDF, setGeneratedPDF] = useState<File | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
-  const [uploadingFiles, setUploadingFiles] = useState(false);
   const [uploadedPDF, setUploadedPDF] = useState<File | null>(null);
   const [protectingPDF, setProtectingPDF] = useState(false);
 
@@ -37,7 +34,9 @@ const CreateRecord: React.FC = () => {
     register,
     handleSubmit,
     reset,
-    formState: { errors }
+    formState: { errors },
+    watch,
+    setValue
   } = useForm<FormData>({
     resolver: yupResolver(schema)
   });
@@ -93,24 +92,6 @@ const CreateRecord: React.FC = () => {
     }
   };
 
-  // Función para subir archivos a Firebase Storage
-  const uploadFilesToStorage = async (files: File[]): Promise<string[]> => {
-    if (files.length === 0) return [];
-    
-    setUploadingFiles(true);
-    try {
-      // Crear un ID temporal para el paciente (se usará para organizar los archivos)
-      const tempPatientId = `temp_${Date.now()}`;
-      const urls = await storageService.uploadDocuments(files, tempPatientId);
-      return urls;
-    } catch (error) {
-      console.error('Error subiendo archivos:', error);
-      throw new Error('Error al subir los documentos');
-    } finally {
-      setUploadingFiles(false);
-    }
-  };
-
   const onSubmit = async (data: FormData) => {
     if (!user?.uid) {
       setError('No se pudo obtener la información del usuario. Por favor, inicia sesión nuevamente.');
@@ -123,13 +104,11 @@ const CreateRecord: React.FC = () => {
     setGeneratedPDF(null);
 
     try {
-      // Subir archivos si existen
       let documentUrls: string[] = [];
       if (uploadedFiles.length > 0) {
-        documentUrls = await uploadFilesToStorage(uploadedFiles);
+        documentUrls = await storageService.uploadDocuments(uploadedFiles, `temp_${Date.now()}`);
       }
 
-      // Crear el paciente
       const patientId = await patientService.create({
         name: data.name,
         surname: data.surname,
@@ -137,9 +116,9 @@ const CreateRecord: React.FC = () => {
         birthDate: data.birthDate
       });
 
-      // Crear el historial médico
-      const record: Omit<MedicalRecord, 'id' | 'createdAt' | 'updatedAt'> = {
-        userId: user.uid, // Incluir el ID del usuario
+      // Crear el objeto del registro sin campos undefined
+      const recordData: any = {
+        userId: user.uid,
         patientId,
         patientName: data.name,
         patientSurname: data.surname,
@@ -147,26 +126,32 @@ const CreateRecord: React.FC = () => {
         patientBirthDate: data.birthDate,
         reportType: data.reportType,
         report: data.report,
-        requestedTests: data.requestedTests || undefined,
-        uploadedDocuments: documentUrls.length > 0 ? documentUrls : undefined,
-        invoiceIssued: data.invoiceIssued,
-        paid: data.paid,
+        invoiceIssued: false,
+        paid: false,
         password: pdfService.generatePassword(data.dni)
       };
 
-      const recordId = await medicalRecordService.create(record);
+      // Solo añadir campos si tienen valores válidos
+      if (data.requestedTests?.trim()) {
+        recordData.requestedTests = data.requestedTests.trim();
+      }
 
-      // Generar PDF protegido
+      if (documentUrls.length > 0) {
+        recordData.uploadedDocuments = documentUrls;
+      }
+
+      const recordId = await medicalRecordService.create(recordData);
       const pdfFile = await pdfService.generateProtectedPDF({
-        ...record,
+        ...recordData,
         id: recordId,
         createdAt: new Date(),
         updatedAt: new Date()
       });
-      
-      const password = record.password;
+
+      const password = recordData.password;
       pdfService.downloadPDF(pdfFile);
       alert(`✅ Documento generado y protegido con contraseña: ${password}`);
+
       setSuccess(true);
       reset();
       setUploadedFiles([]);
@@ -351,19 +336,19 @@ const CreateRecord: React.FC = () => {
                 </div>
               )}
 
-              {uploadingFiles && (
+              {/* {uploadingFiles && (
                 <div className="flex items-center space-x-2 text-primary-600">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
                   <span className="text-sm">Subiendo documentos...</span>
                 </div>
-              )}
+              )} */}
             </div>
           </div>
 
           {/* Subir PDF directamente */}
           <div className="bg-pastel-gray-light rounded-xl p-6">
             <div className="flex items-center space-x-2 mb-4">
-              <Lock className="h-5 w-5 text-primary-600" />
+              <Shield className="h-5 w-5 text-primary-600" />
               <h3 className="text-lg font-semibold text-primary-700">Subir PDF Directamente</h3>
             </div>
 
@@ -419,7 +404,7 @@ const CreateRecord: React.FC = () => {
                           </>
                         ) : (
                           <>
-                            <Lock className="h-4 w-4 mr-2" />
+                            <Shield className="h-4 w-4 mr-2" />
                             Proteger PDF
                           </>
                         )}
@@ -444,56 +429,17 @@ const CreateRecord: React.FC = () => {
               <TestTube className="h-5 w-5 text-primary-600" />
               <h3 className="text-lg font-semibold text-primary-700">Pruebas Solicitadas</h3>
             </div>
-
             <div>
               <label htmlFor="requestedTests" className="block text-sm font-medium text-primary-700 mb-2">
-                Pruebas solicitadas
+                Pruebas solicitadas (opcional)
               </label>
               <textarea
                 id="requestedTests"
                 {...register('requestedTests')}
                 rows={3}
                 className="w-full px-4 py-3 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 resize-none"
-                placeholder="Especifica las pruebas solicitadas para el paciente..."
+                placeholder="Especifica las pruebas solicitadas para el paciente (opcional)..."
               />
-            </div>
-          </div>
-
-          {/* Estado de facturación y pago */}
-          <div className="bg-pastel-gray-light rounded-xl p-6">
-            <div className="flex items-center space-x-2 mb-4">
-              <Receipt className="h-5 w-5 text-primary-600" />
-              <h3 className="text-lg font-semibold text-primary-700">Estado de Facturación</h3>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="flex items-center space-x-3 p-4 border border-pastel-gray-light rounded-xl cursor-pointer hover:bg-white transition-all duration-200">
-                  <input
-                    type="checkbox"
-                    {...register('invoiceIssued')}
-                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-pastel-gray-light rounded"
-                  />
-                  <div className="flex items-center space-x-3">
-                    <Receipt className="h-5 w-5 text-primary-600" />
-                    <span className="text-sm font-medium text-primary-700">Factura emitida</span>
-                  </div>
-                </label>
-              </div>
-
-              <div>
-                <label className="flex items-center space-x-3 p-4 border border-pastel-gray-light rounded-xl cursor-pointer hover:bg-white transition-all duration-200">
-                  <input
-                    type="checkbox"
-                    {...register('paid')}
-                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-pastel-gray-light rounded"
-                  />
-                  <div className="flex items-center space-x-3">
-                    <CreditCard className="h-5 w-5 text-primary-600" />
-                    <span className="text-sm font-medium text-primary-700">Pagado</span>
-                  </div>
-                </label>
-              </div>
             </div>
           </div>
 
@@ -550,22 +496,20 @@ const CreateRecord: React.FC = () => {
               <FileText className="h-5 w-5 text-primary-600" />
               <h3 className="text-lg font-semibold text-primary-700">Informe Clínico</h3>
             </div>
-
             <div>
               <label htmlFor="report" className="block text-sm font-medium text-primary-700 mb-2">
                 Informe Clínico *
               </label>
-              <textarea
-                id="report"
-                {...register('report')}
-                rows={8}
-                className="w-full px-4 py-3 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 resize-none"
-                placeholder="Redacta el informe clínico detallado del paciente..."
+              <RichTextEditor
+                value={watch('report') || ''}
+                onChange={(value) => setValue('report', value)}
+                placeholder="Escribe el informe clínico aquí..."
+                className="w-full"
               />
               {errors.report && (
-                <p className="mt-2 text-sm text-red-600 flex items-center space-x-1">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>{errors.report.message}</span>
+                <p className="mt-2 text-sm text-red-600 flex items-center">
+                  <AlertCircle className="h-4 w-4 mr-1" />
+                  {errors.report.message}
                 </p>
               )}
             </div>
@@ -602,17 +546,17 @@ const CreateRecord: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={loading || uploadingFiles}
-                className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-xl text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-gentle hover:shadow-soft"
+                disabled={loading}
+                className="inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-xl text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Generando...
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+                    Generando documento...
                   </>
                 ) : (
                   <>
-                    <FileText className="h-4 w-4 mr-2" />
+                    <FileText className="h-5 w-5 mr-3" />
                     Generar Documento
                   </>
                 )}

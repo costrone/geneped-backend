@@ -420,30 +420,33 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
                             {record.reportType}
                           </span>
                         </div>
-                        {record.invoiceIssued !== undefined && (
-                          <div className="flex items-center space-x-1">
-                            <Receipt className="h-4 w-4" />
-                            <span className={`text-xs px-2 py-1 rounded-lg ${
-                              record.invoiceIssued 
-                                ? 'bg-green-100 text-green-700' 
-                                : 'bg-yellow-100 text-yellow-700'
-                            }`}>
-                              {record.invoiceIssued ? 'Facturado' : 'Sin facturar'}
-                            </span>
-                          </div>
-                        )}
-                        {record.paid !== undefined && (
-                          <div className="flex items-center space-x-1">
-                            <CreditCard className="h-4 w-4" />
-                            <span className={`text-xs px-2 py-1 rounded-lg ${
-                              record.paid 
-                                ? 'bg-green-100 text-green-700' 
-                                : 'bg-red-100 text-red-700'
-                            }`}>
-                              {record.paid ? 'Pagado' : 'Pendiente'}
-                            </span>
-                          </div>
-                        )}
+                        {/* Estado de facturación - versión compacta */}
+                        <div className="flex items-center space-x-2">
+                          {record.invoiceIssued !== undefined && (
+                            <div className="flex items-center space-x-1">
+                              <Receipt className="h-3 w-3 text-gray-500" />
+                              <span className={`text-xs px-1.5 py-0.5 rounded-md ${
+                                record.invoiceIssued 
+                                  ? 'bg-green-100 text-green-700 border border-green-200' 
+                                  : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                              }`}>
+                                {record.invoiceIssued ? 'Facturado' : 'Sin facturar'}
+                              </span>
+                            </div>
+                          )}
+                          {record.paid !== undefined && (
+                            <div className="flex items-center space-x-1">
+                              <CreditCard className="h-3 w-3 text-gray-500" />
+                              <span className={`text-xs px-1.5 py-0.5 rounded-md ${
+                                record.paid 
+                                  ? 'bg-green-100 text-green-700 border border-green-200' 
+                                  : 'bg-red-100 text-red-700 border border-red-200'
+                              }`}>
+                                {record.paid ? 'Pagado' : 'Pendiente'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       
                       <p className="text-sm text-pastel-gray-dark line-clamp-2 leading-relaxed">

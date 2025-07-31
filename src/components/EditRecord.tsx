@@ -3,22 +3,21 @@ import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { useParams, useNavigate } from 'react-router-dom';
-import { medicalRecordService, patientService, storageService } from '../services/firebase';
+import { FileText, Download, AlertCircle, CheckCircle, User, Shield, ArrowLeft, Save, Upload, X, File, TestTube, ExternalLink } from 'lucide-react';
+import { useUser } from '../contexts/UserContext';
+import { patientService, medicalRecordService, storageService } from '../services/firebase';
 import { pdfService } from '../services/pdfService';
 import { MedicalRecord, Patient } from '../types';
-import { FileText, Download, AlertCircle, CheckCircle, User, Shield, ArrowLeft, Save, Upload, X, File, TestTube, ExternalLink, Receipt, CreditCard } from 'lucide-react';
-import { useUser } from '../contexts/UserContext';
+import RichTextEditor from './RichTextEditor';
 
 const schema = yup.object({
-  name: yup.string().required('El nombre es obligatorio'),
-  surname: yup.string().required('Los apellidos son obligatorios'),
-  dni: yup.string().required('El DNI es obligatorio').matches(/^\d{8}[A-Z]$/, 'DNI debe tener 8 dígitos y una letra'),
+  name: yup.string().required('El nombre es obligatorio').min(2, 'El nombre debe tener al menos 2 caracteres'),
+  surname: yup.string().required('El apellido es obligatorio').min(2, 'El apellido debe tener al menos 2 caracteres'),
+  dni: yup.string().required('El DNI es obligatorio').matches(/^\d{8}[A-Z]$/, 'El DNI debe tener 8 números y una letra'),
   birthDate: yup.string().required('La fecha de nacimiento es obligatoria'),
   reportType: yup.string().oneOf(['Geneped', 'Medicaes'], 'Debe seleccionar un tipo de informe').required('El tipo de informe es obligatorio'),
   report: yup.string().required('El informe clínico es obligatorio').min(10, 'El informe clínico debe tener al menos 10 caracteres'),
-  requestedTests: yup.string().optional(),
-  invoiceIssued: yup.boolean().optional(),
-  paid: yup.boolean().optional()
+  requestedTests: yup.string().optional().nullable()
 }).required();
 
 type FormData = yup.InferType<typeof schema>;
@@ -31,16 +30,17 @@ const EditRecord: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [record, setRecord] = useState<MedicalRecord | null>(null);
   const [patient, setPatient] = useState<Patient | null>(null);
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
-  const [uploadingFiles, setUploadingFiles] = useState(false);
 
   const {
     register,
     handleSubmit,
     reset,
-    formState: { errors }
+    formState: { errors },
+    watch,
+    setValue
   } = useForm<FormData>({
     resolver: yupResolver(schema)
   });
@@ -51,26 +51,9 @@ const EditRecord: React.FC = () => {
     setUploadedFiles(prev => [...prev, ...files]);
   };
 
-  // Función para eliminar un archivo
+  // Función para eliminar archivos
   const removeFile = (index: number) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
-  };
-
-  // Función para subir archivos a Firebase Storage
-  const uploadFilesToStorage = async (files: File[]): Promise<string[]> => {
-    if (files.length === 0) return [];
-    
-    setUploadingFiles(true);
-    try {
-      const tempPatientId = `temp_${Date.now()}`;
-      const urls = await storageService.uploadDocuments(files, tempPatientId);
-      return urls;
-    } catch (error) {
-      console.error('Error subiendo archivos:', error);
-      throw new Error('Error al subir los documentos');
-    } finally {
-      setUploadingFiles(false);
-    }
   };
 
   const loadRecord = useCallback(async () => {
@@ -102,9 +85,7 @@ const EditRecord: React.FC = () => {
         birthDate: recordData.patientBirthDate,
         reportType: recordData.reportType,
         report: recordData.report,
-        requestedTests: recordData.requestedTests || '',
-        invoiceIssued: recordData.invoiceIssued,
-        paid: recordData.paid
+        requestedTests: recordData.requestedTests || ''
       });
     } catch (error) {
       console.error('Error cargando registro:', error);
@@ -128,19 +109,16 @@ const EditRecord: React.FC = () => {
     setSuccess(false);
 
     try {
-      // Subir archivos si existen
       let documentUrls: string[] = [];
       if (uploadedFiles.length > 0) {
-        documentUrls = await uploadFilesToStorage(uploadedFiles);
+        documentUrls = await storageService.uploadDocuments(uploadedFiles, `temp_${Date.now()}`);
       }
 
-      // Combinar documentos existentes con nuevos
       const allDocuments = [
         ...(record.uploadedDocuments || []),
         ...documentUrls
       ];
 
-      // Actualizar datos del paciente
       await patientService.update(patient.id!, {
         name: data.name,
         surname: data.surname,
@@ -148,26 +126,33 @@ const EditRecord: React.FC = () => {
         birthDate: data.birthDate
       });
 
-      // Actualizar el historial médico
-      await medicalRecordService.update(record.id!, {
+      // Crear el objeto de actualización sin campos undefined
+      const updateData: any = {
         patientName: data.name,
         patientSurname: data.surname,
         patientDni: data.dni,
         patientBirthDate: data.birthDate,
         reportType: data.reportType,
-        report: data.report,
-        requestedTests: data.requestedTests || undefined,
-        uploadedDocuments: allDocuments.length > 0 ? allDocuments : undefined,
-        invoiceIssued: data.invoiceIssued,
-        paid: data.paid
-      });
+        report: data.report
+      };
+
+      // Solo añadir campos si tienen valores válidos
+      if (data.requestedTests?.trim()) {
+        updateData.requestedTests = data.requestedTests.trim();
+      }
+
+      if (allDocuments.length > 0) {
+        updateData.uploadedDocuments = allDocuments;
+      }
+
+      await medicalRecordService.update(record.id!, updateData);
 
       setSuccess(true);
       setTimeout(() => {
         navigate('/history');
       }, 2000);
     } catch (error) {
-      console.error('Error actualizando el registro:', error);
+      console.error('Error al actualizar el registro:', error);
       setError('Error al actualizar el registro. Por favor, inténtalo de nuevo.');
     } finally {
       setSaving(false);
@@ -453,12 +438,12 @@ const EditRecord: React.FC = () => {
                 </div>
               )}
 
-              {uploadingFiles && (
+              {/* {uploadingFiles && (
                 <div className="flex items-center space-x-2 text-primary-600">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
                   <span className="text-sm">Subiendo documentos...</span>
                 </div>
-              )}
+              )} */}
             </div>
           </div>
 
@@ -470,61 +455,20 @@ const EditRecord: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-primary-700">Pruebas Solicitadas</h2>
-                <p className="text-pastel-gray-dark text-sm">Especifica las pruebas solicitadas para el paciente</p>
+                <p className="text-pastel-gray-dark text-sm">Pruebas solicitadas para el paciente (opcional)</p>
               </div>
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-primary-700 mb-2">
+              <label htmlFor="requestedTests" className="block text-sm font-medium text-primary-700 mb-2">
                 Pruebas solicitadas
               </label>
               <textarea
+                id="requestedTests"
                 {...register('requestedTests')}
                 rows={3}
                 className="w-full px-4 py-3 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 resize-none"
-                placeholder="Especifica las pruebas solicitadas para el paciente..."
+                placeholder="Especifica las pruebas solicitadas para el paciente (opcional)..."
               />
-            </div>
-          </div>
-
-          {/* Estado de facturación y pago */}
-          <div className="mb-8">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="w-10 h-10 bg-gradient-to-br from-pastel-blue to-pastel-blue-light rounded-lg flex items-center justify-center">
-                <Receipt className="h-5 w-5 text-primary-700" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-primary-700">Estado de Facturación</h2>
-                <p className="text-pastel-gray-dark text-sm">Gestiona el estado de facturación y pago</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="flex items-center space-x-4 p-4 border border-pastel-gray-light rounded-xl">
-                <input
-                  {...register('invoiceIssued')}
-                  type="checkbox"
-                  id="invoiceIssued"
-                  className="w-4 h-4 text-primary-600 border-pastel-gray-light focus:ring-primary-500"
-                />
-                <label htmlFor="invoiceIssued" className="flex items-center space-x-3 cursor-pointer">
-                  <Receipt className="h-5 w-5 text-primary-600" />
-                  <span className="text-sm font-medium text-primary-700">Factura emitida</span>
-                </label>
-              </div>
-
-              <div className="flex items-center space-x-4 p-4 border border-pastel-gray-light rounded-xl">
-                <input
-                  {...register('paid')}
-                  type="checkbox"
-                  id="paid"
-                  className="w-4 h-4 text-primary-600 border-pastel-gray-light focus:ring-primary-500"
-                />
-                <label htmlFor="paid" className="flex items-center space-x-3 cursor-pointer">
-                  <CreditCard className="h-5 w-5 text-primary-600" />
-                  <span className="text-sm font-medium text-primary-700">Pagado</span>
-                </label>
-              </div>
             </div>
           </div>
 
@@ -582,43 +526,55 @@ const EditRecord: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-primary-700">Informe Clínico</h2>
-                <p className="text-pastel-gray-dark text-sm">Redacta el informe clínico detallado</p>
+                <p className="text-pastel-gray-dark text-sm">Informe clínico detallado del paciente</p>
               </div>
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-primary-700 mb-2">
+              <label htmlFor="report" className="block text-sm font-medium text-primary-700 mb-2">
                 Informe Clínico *
               </label>
-              <textarea
-                {...register('report')}
-                rows={8}
-                className="w-full px-4 py-3 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 resize-none"
-                placeholder="Escribe aquí el informe clínico detallado del paciente..."
+              <RichTextEditor
+                value={watch('report') || ''}
+                onChange={(value) => setValue('report', value)}
+                placeholder="Escribe el informe clínico aquí..."
+                className="w-full"
               />
               {errors.report && (
-                <p className="mt-1 text-sm text-red-600">{errors.report.message}</p>
+                <p className="mt-2 text-sm text-red-600 flex items-center">
+                  <AlertCircle className="h-4 w-4 mr-1" />
+                  {errors.report.message}
+                </p>
               )}
             </div>
           </div>
 
           {/* Botones de acción */}
-          <div className="flex items-center justify-end space-x-4 pt-6 border-t border-pastel-gray-light">
+          <div className="flex justify-between items-center pt-6 border-t border-pastel-gray-light">
             <button
               type="button"
               onClick={() => navigate('/history')}
               className="inline-flex items-center px-6 py-3 border border-primary-300 text-sm font-medium rounded-xl text-primary-700 bg-white hover:bg-pastel-gray-light focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200"
             >
-              Cancelar
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Volver al historial
             </button>
-            
+
             <button
               type="submit"
-              disabled={saving || uploadingFiles}
-              className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-xl text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 shadow-gentle hover:shadow-soft disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={saving}
+              className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-xl text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Save className="h-4 w-4 mr-2" />
-              {saving ? 'Guardando...' : 'Guardar Cambios'}
+              {saving ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Guardando...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Guardar cambios
+                </>
+              )}
             </button>
           </div>
         </form>

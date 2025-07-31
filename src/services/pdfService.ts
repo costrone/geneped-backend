@@ -44,218 +44,128 @@ class PDFService {
 
   // Generar PDF sin contraseña (para uso interno)
   async generatePDF(record: MedicalRecord): Promise<File> {
+    const doc = new jsPDF();
+    
+    // Configuración de márgenes
+    const margin = 20;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const contentWidth = pageWidth - (margin * 2);
+    let yPosition = margin;
+
+    // Logo y encabezado
     try {
-      const doc = new jsPDF();
-      doc.setFont('helvetica');
-
-      // Cargar y añadir logo con proporciones correctas
-      let logoWidth = 50;
-      let logoHeight = 50;
-      let logoX = 75;
-
-      try {
-        const logoPath = record.reportType === 'Geneped' ? '/logo.png' : '/Medicaes.png';
-        const dimensions = await this.loadImage(logoPath);
-        const calculatedDimensions = this.calculateImageDimensions(dimensions.width, dimensions.height, 60, 60);
-
-        logoWidth = calculatedDimensions.width;
-        logoHeight = calculatedDimensions.height;
-        logoX = 105 - (logoWidth / 2); // Centrar el logo
-      } catch (error) {
-        console.warn('No se pudo cargar la imagen del logo, usando dimensiones por defecto');
-      }
-
-      // Añadir logo con dimensiones calculadas
-      if (record.reportType === 'Geneped') {
-        doc.addImage('/logo.png', 'PNG', logoX, 20, logoWidth, logoHeight);
-      } else if (record.reportType === 'Medicaes') {
-        doc.addImage('/Medicaes.png', 'PNG', logoX, 20, logoWidth, logoHeight);
-      }
-
-      // Encabezado en negrita más cerca del logo
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(18);
-      doc.text('GENÉTICA MÉDICA Y ASESORAMIENTO GENÉTICO', 105, 75, { align: 'center' });
-      doc.text('INFORME CLÍNICO', 105, 85, { align: 'center' });
-
-      // Fecha de generación (solo la fecha, alineada a la derecha)
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(12);
-      const currentDate = new Date().toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-      doc.text(currentDate, 190, 95, { align: 'right' });
-
-      // Línea separadora decorativa
-      doc.setDrawColor(100, 100, 100);
-      doc.line(20, 105, 190, 105);
-      doc.setDrawColor(0, 0, 0);
-
-      // Datos del paciente con formato profesional
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(14);
-      doc.text('DATOS DEL PACIENTE', 20, 125);
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(12);
-
-      // Cuadro de datos del paciente
-      doc.setFillColor(245, 245, 245);
-      doc.rect(20, 130, 170, 50, 'F');
-      doc.setFillColor(255, 255, 255);
-
-      doc.text(`Nombre completo: ${record.patientName} ${record.patientSurname}`, 25, 140);
-      doc.text(`DNI: ${record.patientDni}`, 25, 150);
-      doc.text(`Fecha de nacimiento: ${new Date(record.patientBirthDate).toLocaleDateString('es-ES')}`, 25, 160);
-      doc.text(`Fecha del informe: ${record.createdAt.toLocaleDateString('es-ES')}`, 25, 170);
-
-      let currentY = 200;
-
-      // Pruebas solicitadas (si existen)
-      if (record.requestedTests) {
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(14);
-        doc.text('PRUEBAS SOLICITADAS', 20, currentY);
-        currentY += 15;
-
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(12);
-        
-        const testsLines = doc.splitTextToSize(record.requestedTests, 170);
-        testsLines.forEach((line: string) => {
-          doc.text(line, 20, currentY);
-          currentY += 5;
-        });
-        
-        currentY += 10;
-      }
-
-      // Documentos adjuntos (si existen)
-      if (record.uploadedDocuments && record.uploadedDocuments.length > 0) {
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(14);
-        doc.text('DOCUMENTOS ADJUNTOS', 20, currentY);
-        currentY += 15;
-
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(12);
-        
-        record.uploadedDocuments.forEach((url: string, index: number) => {
-          const fileName = url.split('/').pop() || `Documento ${index + 1}`;
-          doc.text(`• ${fileName}`, 20, currentY);
-          currentY += 5;
-        });
-        
-        currentY += 10;
-      }
-
-      // Estado de facturación (si existe)
-      if (record.invoiceIssued !== undefined || record.paid !== undefined) {
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(14);
-        doc.text('ESTADO DE FACTURACIÓN', 20, currentY);
-        currentY += 15;
-
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(12);
-        
-        if (record.invoiceIssued !== undefined) {
-          doc.text(`• Factura emitida: ${record.invoiceIssued ? 'Sí' : 'No'}`, 20, currentY);
-          currentY += 5;
-        }
-        
-        if (record.paid !== undefined) {
-          doc.text(`• Pagado: ${record.paid ? 'Sí' : 'No'}`, 20, currentY);
-          currentY += 5;
-        }
-        
-        currentY += 10;
-      }
-
-      // Informe clínico con formato profesional
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(14);
-      doc.text('INFORME CLÍNICO', 20, currentY);
-      currentY += 15;
-
-      doc.setFont('times', 'normal');
-      doc.setFontSize(11);
-
-      // Añadir el informe clínico con paginación automática
-      const reportLines = doc.splitTextToSize(record.report, 170);
+      const logoResponse = await fetch('/LOGO DEFINITIVO.png');
+      const logoBlob = await logoResponse.blob();
+      const logoArrayBuffer = await logoBlob.arrayBuffer();
+      const logoBase64 = btoa(String.fromCharCode(...Array.from(new Uint8Array(logoArrayBuffer))));
       
-      // Función para añadir texto con paginación automática
-      const addTextWithPagination = (text: string[], startY: number) => {
-        let currentY = startY;
-        const lineHeight = 5; // Espaciado sencillo (reducido de 8 a 5)
-        const maxY = 270; // Altura máxima antes de nueva página
-        
-        // Configurar fuente Times New Roman para el texto del informe
-        doc.setFont('times', 'normal');
-        doc.setFontSize(11);
-        
-        for (let i = 0; i < text.length; i++) {
-          const line = text[i];
-          
-          // Si no hay espacio suficiente en la página actual, crear nueva página
-          if (currentY + lineHeight > maxY) {
-            doc.addPage();
-            currentY = 20; // Comenzar desde arriba en la nueva página
-            
-            // Añadir encabezado en páginas adicionales
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(12);
-            doc.text('INFORME CLÍNICO - Continuación', 20, 15);
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(12);
-            currentY = 25; // Espacio después del encabezado
-          }
-          
-          // Aplicar justificación al texto
-          const words = line.split(' ');
-          if (words.length > 1) {
-            // Calcular espaciado para justificación
-            const lineWidth = doc.getTextWidth(line);
-            const spaceWidth = (170 - lineWidth) / (words.length - 1);
-            let xPos = 20;
-            
-            for (const word of words) {
-              doc.text(word, xPos, currentY);
-              xPos += doc.getTextWidth(word) + spaceWidth;
-            }
-          } else {
-            // Línea con una sola palabra, alinear a la izquierda
-            doc.text(line, 20, currentY);
-          }
-          
-          currentY += lineHeight;
-        }
-        
-        return currentY; // Retornar la posición Y final para el pie de página
-      };
-      
-      // Añadir el informe con paginación
-      addTextWithPagination(reportLines, currentY);
-      
-      // Pie de página en la última página
-      doc.setFont('helvetica', 'italic');
-      doc.setFontSize(10);
-      doc.setDrawColor(200, 200, 200);
-      doc.line(20, 280, 190, 280);
-      doc.setDrawColor(0, 0, 0);
-      doc.text('Documento generado por Geneped - Sistema de Gestión de Historiales', 105, 285, { align: 'center' });
-
-      // Generar archivo
-      const pdfBlob = doc.output('blob');
-      const filename = 'historial_' + record.patientDni + '_' + record.createdAt.toISOString().split('T')[0] + '.pdf';
-
-      return new File([pdfBlob], filename, { type: 'application/pdf' });
+      doc.addImage(`data:image/png;base64,${logoBase64}`, 'PNG', margin, yPosition, 40, 20);
     } catch (error) {
-      console.error('Error generando PDF:', error);
-      throw new Error('Error generando PDF');
+      console.warn('No se pudo cargar el logo:', error);
     }
+
+    // Título del informe
+    yPosition += 30;
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('INFORME CLÍNICO', pageWidth / 2, yPosition, { align: 'center' });
+
+    // Información del paciente
+    yPosition += 20;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DATOS DEL PACIENTE:', margin, yPosition);
+    
+    yPosition += 10;
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Nombre: ${record.patientName} ${record.patientSurname}`, margin, yPosition);
+    
+    yPosition += 8;
+    doc.text(`DNI: ${record.patientDni}`, margin, yPosition);
+    
+    yPosition += 8;
+    doc.text(`Fecha de nacimiento: ${record.patientBirthDate}`, margin, yPosition);
+
+    // Tipo de informe
+    yPosition += 15;
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Tipo de informe: ${record.reportType}`, margin, yPosition);
+
+    // Informe clínico
+    yPosition += 15;
+    doc.setFont('helvetica', 'bold');
+    doc.text('INFORME CLÍNICO:', margin, yPosition);
+    
+    yPosition += 10;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    
+    // Convertir HTML a texto plano para el PDF
+    const plainText = this.convertFormattedTextToPlainText(record.report);
+    const reportLines = doc.splitTextToSize(plainText, contentWidth);
+    
+    for (const line of reportLines) {
+      // Verificar si necesitamos una nueva página
+      if (yPosition > doc.internal.pageSize.getHeight() - margin) {
+        doc.addPage();
+        yPosition = margin;
+      }
+      doc.text(line, margin, yPosition);
+      yPosition += 6; // Espaciado entre líneas
+    }
+
+    // Pruebas solicitadas (solo si existen)
+    if (record.requestedTests && record.requestedTests.trim() !== '') {
+      yPosition += 10;
+      doc.setFont('helvetica', 'bold');
+      doc.text('PRUEBAS SOLICITADAS:', margin, yPosition);
+      
+      yPosition += 10;
+      doc.setFont('helvetica', 'normal');
+      const testsLines = doc.splitTextToSize(record.requestedTests, contentWidth);
+      
+      for (const line of testsLines) {
+        if (yPosition > doc.internal.pageSize.getHeight() - margin) {
+          doc.addPage();
+          yPosition = margin;
+        }
+        doc.text(line, margin, yPosition);
+        yPosition += 6;
+      }
+    }
+
+    // Documentos adjuntos (solo si existen)
+    if (record.uploadedDocuments && record.uploadedDocuments.length > 0) {
+      yPosition += 10;
+      doc.setFont('helvetica', 'bold');
+      doc.text('DOCUMENTOS ADJUNTOS:', margin, yPosition);
+      
+      yPosition += 10;
+      doc.setFont('helvetica', 'normal');
+      
+      record.uploadedDocuments.forEach((url, index) => {
+        const fileName = url.split('/').pop() || `Documento ${index + 1}`;
+        if (yPosition > doc.internal.pageSize.getHeight() - margin) {
+          doc.addPage();
+          yPosition = margin;
+        }
+        doc.text(`• ${fileName}`, margin, yPosition);
+        yPosition += 6;
+      });
+    }
+
+    // Fecha del informe
+    yPosition += 15;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    const currentDate = new Date().toLocaleDateString('es-ES');
+    doc.text(`Fecha del informe: ${currentDate}`, margin, yPosition);
+
+    // Generar el archivo PDF
+    const pdfBlob = doc.output('blob');
+    const filename = `Informe_${record.patientName}_${record.patientSurname}_${currentDate.replace(/\//g, '-')}.pdf`;
+    
+    return new File([pdfBlob], filename, { type: 'application/pdf' });
   }
 
   // Proteger PDF subido directamente
@@ -351,6 +261,40 @@ class PDFService {
       console.error('Error enviando PDF por email:', error);
       throw new Error('Error enviando PDF por email');
     }
+  }
+
+  // Función para convertir HTML a texto plano
+  private convertHtmlToPlainText(html: string): string {
+    // Crear un elemento temporal para parsear el HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    
+    // Obtener el texto plano
+    let text = tempDiv.textContent || tempDiv.innerText || '';
+    
+    // Limpiar espacios extra y saltos de línea
+    text = text.replace(/\s+/g, ' ').trim();
+    
+    return text;
+  }
+
+  // Función para convertir formato markdown y HTML a texto plano
+  private convertFormattedTextToPlainText(text: string): string {
+    // Remover formato markdown
+    let plainText = text
+      .replace(/\*\*(.*?)\*\*/g, '$1') // Bold
+      .replace(/\*(.*?)\*/g, '$1') // Italic
+      .replace(/__(.*?)__/g, '$1'); // Underline
+    
+    // Remover formato HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = plainText;
+    plainText = tempDiv.textContent || tempDiv.innerText || '';
+    
+    // Limpiar espacios extra y saltos de línea
+    plainText = plainText.replace(/\s+/g, ' ').trim();
+    
+    return plainText;
   }
 }
 

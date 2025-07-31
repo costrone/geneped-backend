@@ -16,7 +16,6 @@ import {
   deleteDoc, 
   query, 
   where, 
-  orderBy, 
   Timestamp,
   writeBatch 
 } from 'firebase/firestore';
@@ -114,8 +113,13 @@ export const patientService = {
 // Servicio de historiales médicos
 export const medicalRecordService = {
   create: async (record: Omit<MedicalRecord, 'id' | 'createdAt' | 'updatedAt'>) => {
+    // Filtrar campos undefined antes de crear el documento
+    const cleanRecord = Object.fromEntries(
+      Object.entries(record).filter(([_, value]) => value !== undefined)
+    );
+    
     const docRef = await addDoc(collection(db, 'medicalRecords'), {
-      ...record,
+      ...cleanRecord,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now()
     });
@@ -123,9 +127,14 @@ export const medicalRecordService = {
   },
 
   update: async (id: string, updates: Partial<MedicalRecord>) => {
+    // Filtrar campos undefined antes de actualizar
+    const cleanUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([_, value]) => value !== undefined)
+    );
+    
     const docRef = doc(db, 'medicalRecords', id);
     await updateDoc(docRef, {
-      ...updates,
+      ...cleanUpdates,
       updatedAt: Timestamp.now()
     });
   },
@@ -174,17 +183,20 @@ export const medicalRecordService = {
       filterConditions.push(where('deletedAt', '==', null));
     }
     
-    // Crear la consulta final con filtros y ordenamiento
-    const finalQuery = query(q, ...filterConditions, orderBy('createdAt', 'desc'));
+    // Crear la consulta final solo con filtros (sin ordenamiento)
+    const finalQuery = query(q, ...filterConditions);
     
     const querySnapshot = await getDocs(finalQuery);
-    return querySnapshot.docs.map(doc => ({
+    const records = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
       createdAt: doc.data().createdAt?.toDate(),
       updatedAt: doc.data().updatedAt?.toDate(),
       deletedAt: doc.data().deletedAt?.toDate()
     })) as MedicalRecord[];
+    
+    // Ordenar en el cliente para evitar problemas de índices
+    return records.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   },
 
   getById: async (id: string, userId: string) => {
@@ -247,6 +259,7 @@ export const medicalRecordService = {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysOld);
     
+    // Consulta simple sin ordenamiento
     const q = query(
       collection(db, 'medicalRecords'),
       where('userId', '==', userId),
