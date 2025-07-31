@@ -23,7 +23,13 @@ const RecordHistory: React.FC = () => {
       setError('');
       console.log('Usuario autenticado:', user?.email);
       console.log('Cargando registros...');
-      const data = await medicalRecordService.getAll();
+      
+      if (!user?.uid) {
+        setError('No se pudo obtener la información del usuario.');
+        return;
+      }
+      
+      const data = await medicalRecordService.getAll(user.uid);
       console.log('Registros cargados:', data.length);
       setRecords(data);
     } catch (error) {
@@ -175,9 +181,14 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
   };
 
   const deleteRecord = async (record: MedicalRecord) => {
+    if (!user?.uid) {
+      alert('❌ No se pudo obtener la información del usuario.');
+      return;
+    }
+
     if (window.confirm(`¿Estás seguro de que quieres eliminar el registro de ${record.patientName} ${record.patientSurname}?`)) {
       try {
-        await medicalRecordService.softDelete(record.id!);
+        await medicalRecordService.softDelete(record.id!, user.uid);
         await loadRecords();
         alert('✅ Registro eliminado exitosamente.');
       } catch (error) {

@@ -1,17 +1,19 @@
 import { useEffect, useRef } from 'react';
 import { medicalRecordService } from '../services/firebase';
+import { useUser } from '../contexts/UserContext';
 
 export const useAutoCleanup = () => {
+  const { user } = useUser();
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    if (!user?.uid) return;
+
     // Función para limpiar registros antiguos
     const cleanupOldRecords = async () => {
       try {
-        const deletedCount = await medicalRecordService.cleanupOldDeleted();
-        if (deletedCount > 0) {
-          console.log(`🧹 Limpieza automática: ${deletedCount} registros eliminados definitivamente`);
-        }
+        await medicalRecordService.cleanupOldDeleted(user.uid);
+        console.log('🧹 Limpieza automática completada para el usuario:', user.uid);
       } catch (error) {
         console.error('Error en limpieza automática:', error);
       }
@@ -29,13 +31,17 @@ export const useAutoCleanup = () => {
         clearInterval(intervalRef.current);
       }
     };
-  }, []);
+  }, [user]);
 
   // Función para ejecutar limpieza manual
   const manualCleanup = async () => {
+    if (!user?.uid) {
+      throw new Error('Usuario no autenticado');
+    }
+
     try {
-      const deletedCount = await medicalRecordService.cleanupOldDeleted();
-      return deletedCount;
+      await medicalRecordService.cleanupOldDeleted(user.uid);
+      console.log('🧹 Limpieza manual completada para el usuario:', user.uid);
     } catch (error) {
       console.error('Error en limpieza manual:', error);
       throw error;

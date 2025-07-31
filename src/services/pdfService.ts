@@ -1,20 +1,23 @@
-import { MedicalRecord } from '../types';
 import jsPDF from 'jspdf';
+import { PDFDocument } from 'pdf-lib-with-encrypt';
+import { MedicalRecord } from '../types';
 import { emailService } from './emailService';
+import { storageService } from './firebase';
 
-export const pdfService = {
+class PDFService {
+  // Generar contraseña basada en el DNI
   generatePassword(dni: string): string {
-    // Extraer los últimos 3 dígitos y la letra
-    const match = dni.match(/(\d{3})([A-Za-z])$/);
+    // Extraer los últimos 3 dígitos y la letra del DNI
+    const match = dni.match(/(\d{3})([A-Z])$/);
     if (match) {
-      return match[1] + match[2];
+      return match[1] + match[2]; // últimos 3 dígitos + letra
     }
-    // Fallback si el formato no es el esperado
-    return dni.slice(-4);
-  },
+    // Fallback si no coincide el patrón
+    return dni.slice(-4); // últimos 4 caracteres
+  }
 
-  // Función para cargar imagen y obtener dimensiones
-  loadImage(src: string): Promise<{ width: number; height: number }> {
+  // Cargar imagen y obtener dimensiones
+  async loadImage(src: string): Promise<{ width: number; height: number }> {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
@@ -23,16 +26,21 @@ export const pdfService = {
       img.onerror = reject;
       img.src = src;
     });
-  },
+  }
 
-  // Función para calcular dimensiones manteniendo proporciones
-  calculateImageDimensions(originalWidth: number, originalHeight: number, maxWidth: number, maxHeight: number) {
+  // Calcular dimensiones manteniendo proporción
+  calculateImageDimensions(
+    originalWidth: number,
+    originalHeight: number,
+    maxWidth: number,
+    maxHeight: number
+  ): { width: number; height: number } {
     const ratio = Math.min(maxWidth / originalWidth, maxHeight / originalHeight);
     return {
       width: originalWidth * ratio,
       height: originalHeight * ratio
     };
-  },
+  }
 
   // Generar PDF sin contraseña (para uso interno)
   async generatePDF(record: MedicalRecord): Promise<File> {
@@ -248,25 +256,16 @@ export const pdfService = {
       console.error('Error generando PDF:', error);
       throw new Error('Error generando PDF');
     }
-  },
+  }
 
-  // Generar PDF protegido con contraseña real
-  async generateProtectedPDF(record: MedicalRecord): Promise<File> {
+  // Proteger PDF subido directamente
+  async generateProtectedPDFFromFile(file: File, password: string): Promise<File> {
     try {
-      // Importar dinámicamente pdf-lib-with-encrypt
-      const { PDFDocument } = await import('pdf-lib-with-encrypt');
+      // Leer el archivo PDF
+      const arrayBuffer = await file.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(arrayBuffer);
       
-      // Generar PDF base
-      const pdfFile = await this.generatePDF(record);
-      const pdfBytes = await pdfFile.arrayBuffer();
-      
-      // Crear documento PDF con pdf-lib
-      const pdfDoc = await PDFDocument.load(pdfBytes);
-      
-      // Generar contraseña
-      const password = this.generatePassword(record.patientDni);
-      
-      // Proteger el PDF con contraseña
+      // Proteger el PDF con contraseña usando la API correcta
       pdfDoc.encrypt({
         userPassword: password,
         ownerPassword: password,
@@ -280,22 +279,39 @@ export const pdfService = {
           documentAssembly: false
         }
       });
-      
+
       // Guardar PDF protegido
       const protectedPdfBytes = await pdfDoc.save();
+
+      // Crear archivo protegido
+      const protectedBlob = new Blob([protectedPdfBytes], { type: 'application/pdf' });
+      const filename = file.name.replace('.pdf', '_protegido.pdf');
       
-      // Crear archivo
-      const filename = 'historial_protegido_' + record.patientDni + '_' + record.createdAt.toISOString().split('T')[0] + '.pdf';
-      return new File([protectedPdfBytes], filename, { type: 'application/pdf' });
+      return new File([protectedBlob], filename, { type: 'application/pdf' });
+    } catch (error) {
+      console.error('Error protegiendo PDF:', error);
+      throw new Error('Error protegiendo PDF');
+    }
+  }
+
+  // Generar PDF protegido con contraseña
+  async generateProtectedPDF(record: MedicalRecord): Promise<File> {
+    try {
+      // Primero generar el PDF sin contraseña
+      const unprotectedPDF = await this.generatePDF(record);
       
+      // Luego protegerlo con contraseña
+      const password = this.generatePassword(record.patientDni);
+      const protectedPDF = await this.generateProtectedPDFFromFile(unprotectedPDF, password);
+      
+      return protectedPDF;
     } catch (error) {
       console.error('Error generando PDF protegido:', error);
-      // Fallback a PDF sin protección
-      console.warn('Usando PDF sin protección como fallback');
-      return await this.generatePDF(record);
+      throw new Error('Error generando PDF protegido');
     }
-  },
+  }
 
+  // Descargar PDF
   downloadPDF(file: File): void {
     const url = URL.createObjectURL(file);
     const a = document.createElement('a');
@@ -305,77 +321,37 @@ export const pdfService = {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  },
+  }
 
-  // Función para enviar enlace de descarga por email
-  async sendProtectedPDFByEmail(record: MedicalRecord, email: string, userEmail: string): Promise<void> {
+  // Enviar PDF protegido por email
+  async sendProtectedPDFByEmail(
+    record: MedicalRecord,
+    recipientEmail: string,
+    userEmail: string
+  ): Promise<void> {
     try {
       // Generar PDF protegido
-      const protectedPdfFile = await this.generateProtectedPDF(record);
+      const pdfFile = await this.generateProtectedPDF(record);
       const password = this.generatePassword(record.patientDni);
-      
-      // Subir PDF a Firebase Storage y generar enlace temporal
-      const downloadLink = await this.uploadPDFAndGetLink(protectedPdfFile, record);
-      
-      // Enviar email con enlace usando EmailJS
-      await this.sendEmailWithDownloadLink(record, email, userEmail, downloadLink, password);
-      
-      console.log('Email con enlace enviado exitosamente');
-      alert('✅ Email enviado exitosamente a: ' + email + '\n\n🔗 Enlace de descarga enviado\n🔐 Contraseña: ' + password + '\n\nEl PDF está protegido y el enlace expira en 48 horas.');
-      
-    } catch (error) {
-      console.error('Error enviando email con enlace:', error);
-      throw new Error('Error enviando email: ' + (error instanceof Error ? error.message : 'Error desconocido'));
-    }
-  },
 
-  // Subir PDF a Firebase Storage y generar enlace temporal
-  async uploadPDFAndGetLink(pdfFile: File, record: MedicalRecord): Promise<string> {
-    try {
-      const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
-      const { storage } = await import('../firebase/config');
-      
-      // Crear referencia única para el archivo
-      const timestamp = Date.now();
-      const filename = 'protected_pdfs/' + record.patientDni + '_' + timestamp + '_' + pdfFile.name;
-      const storageRef = ref(storage, filename);
-      
-      // Subir archivo
-      await uploadBytes(storageRef, pdfFile);
-      
-      // Generar enlace de descarga temporal (48 horas)
-      const downloadURL = await getDownloadURL(storageRef);
-      
-      return downloadURL;
-      
-    } catch (error) {
-      console.error('Error subiendo PDF a Storage:', error);
-      throw new Error('Error subiendo PDF a Storage');
-    }
-  },
+      // Subir PDF a Firebase Storage
+      const fileName = `pdfs/${record.patientDni}_${Date.now()}.pdf`;
+      const downloadURL = await storageService.uploadFile(pdfFile, fileName);
 
-  // Enviar email con enlace de descarga usando EmailJS
-  async sendEmailWithDownloadLink(record: MedicalRecord, email: string, userEmail: string, downloadLink: string, password: string): Promise<void> {
-    try {
-      await emailService.sendEmailWithDownloadLink(record, email, userEmail, downloadLink, password);
-    } catch (error) {
-      console.error('Error enviando email con enlace:', error);
-      throw new Error('Error enviando email con enlace de descarga');
-    }
-  },
+      // Enviar email con enlace de descarga
+      await emailService.sendEmailWithDownloadLink(
+        record,
+        recipientEmail,
+        userEmail,
+        downloadURL,
+        password
+      );
 
-  // Convertir archivo a base64
-  fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        const base64 = reader.result as string;
-        // Remover el prefijo "data:application/pdf;base64,"
-        const base64Clean = base64.split(',')[1];
-        resolve(base64Clean);
-      };
-      reader.onerror = error => reject(error);
-    });
+    } catch (error) {
+      console.error('Error enviando PDF por email:', error);
+      throw new Error('Error enviando PDF por email');
+    }
   }
-}; 
+}
+
+export const pdfService = new PDFService(); 

@@ -84,6 +84,22 @@ export const patientService = {
     });
   },
 
+  getById: async (id: string) => {
+    const docSnap = await getDocs(query(collection(db, 'patients'), where('__name__', '==', id)));
+    
+    if (!docSnap.empty) {
+      const docData = docSnap.docs[0].data();
+      return {
+        id: docSnap.docs[0].id,
+        ...docData,
+        createdAt: docData.createdAt?.toDate(),
+        updatedAt: docData.updatedAt?.toDate()
+      } as Patient;
+    }
+    
+    return null;
+  },
+
   getAll: async () => {
     const querySnapshot = await getDocs(collection(db, 'patients'));
     return querySnapshot.docs.map(doc => ({
@@ -114,56 +130,54 @@ export const medicalRecordService = {
     });
   },
 
-  getAll: async (filters?: SearchFilters) => {
+  getAll: async (userId: string, filters?: SearchFilters) => {
     let q = collection(db, 'medicalRecords');
     
-    // Aplicar filtros si existen
+    // Siempre filtrar por userId para separar historiales por usuario
+    const filterConditions = [where('userId', '==', userId)];
+    
+    // Aplicar filtros adicionales si existen
     if (filters) {
-      const conditions = [];
-      
       if (filters.name) {
-        conditions.push(where('patientName', '>=', filters.name));
-        conditions.push(where('patientName', '<=', filters.name + '\uf8ff'));
+        filterConditions.push(where('patientName', '>=', filters.name));
+        filterConditions.push(where('patientName', '<=', filters.name + '\uf8ff'));
       }
       
       if (filters.surname) {
-        conditions.push(where('patientSurname', '>=', filters.surname));
-        conditions.push(where('patientSurname', '<=', filters.surname + '\uf8ff'));
+        filterConditions.push(where('patientSurname', '>=', filters.surname));
+        filterConditions.push(where('patientSurname', '<=', filters.surname + '\uf8ff'));
       }
       
       if (filters.dni) {
-        conditions.push(where('patientDni', '==', filters.dni));
+        filterConditions.push(where('patientDni', '==', filters.dni));
       }
       
       if (filters.dateFrom) {
-        conditions.push(where('createdAt', '>=', Timestamp.fromDate(filters.dateFrom)));
+        filterConditions.push(where('createdAt', '>=', Timestamp.fromDate(filters.dateFrom)));
       }
       
       if (filters.dateTo) {
-        conditions.push(where('createdAt', '<=', Timestamp.fromDate(filters.dateTo)));
+        filterConditions.push(where('createdAt', '<=', Timestamp.fromDate(filters.dateTo)));
       }
       
       if (filters.keywords) {
-        conditions.push(where('report', '>=', filters.keywords));
-        conditions.push(where('report', '<=', filters.keywords + '\uf8ff'));
+        filterConditions.push(where('report', '>=', filters.keywords));
+        filterConditions.push(where('report', '<=', filters.keywords + '\uf8ff'));
       }
       
       // Por defecto, no incluir registros eliminados
       if (!filters.includeDeleted) {
-        conditions.push(where('deletedAt', '==', null));
-      }
-      
-      if (conditions.length > 0) {
-        q = query(q, ...conditions, orderBy('createdAt', 'desc'));
-      } else {
-        q = query(q, orderBy('createdAt', 'desc'));
+        filterConditions.push(where('deletedAt', '==', null));
       }
     } else {
       // Por defecto, no incluir registros eliminados
-      q = query(q, where('deletedAt', '==', null), orderBy('createdAt', 'desc'));
+      filterConditions.push(where('deletedAt', '==', null));
     }
     
-    const querySnapshot = await getDocs(q);
+    // Crear la consulta final con filtros y ordenamiento
+    const finalQuery = query(q, ...filterConditions, orderBy('createdAt', 'desc'));
+    
+    const querySnapshot = await getDocs(finalQuery);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
@@ -173,9 +187,8 @@ export const medicalRecordService = {
     })) as MedicalRecord[];
   },
 
-  getById: async (id: string) => {
-    const docRef = doc(db, 'medicalRecords', id);
-    const docSnap = await getDocs(query(collection(db, 'medicalRecords'), where('__name__', '==', id)));
+  getById: async (id: string, userId: string) => {
+    const docSnap = await getDocs(query(collection(db, 'medicalRecords'), where('__name__', '==', id), where('userId', '==', userId)));
     
     if (!docSnap.empty) {
       const docData = docSnap.docs[0].data();
@@ -191,7 +204,13 @@ export const medicalRecordService = {
     return null;
   },
 
-  softDelete: async (id: string) => {
+  softDelete: async (id: string, userId: string) => {
+    // Verificar que el registro pertenece al usuario antes de eliminarlo
+    const record = await medicalRecordService.getById(id, userId);
+    if (!record) {
+      throw new Error('Registro no encontrado o no tienes permisos para eliminarlo');
+    }
+    
     const docRef = doc(db, 'medicalRecords', id);
     await updateDoc(docRef, {
       deletedAt: Timestamp.now(),
@@ -199,7 +218,13 @@ export const medicalRecordService = {
     });
   },
 
-  restore: async (id: string) => {
+  restore: async (id: string, userId: string) => {
+    // Verificar que el registro pertenece al usuario antes de restaurarlo
+    const record = await medicalRecordService.getById(id, userId);
+    if (!record) {
+      throw new Error('Registro no encontrado o no tienes permisos para restaurarlo');
+    }
+    
     const docRef = doc(db, 'medicalRecords', id);
     await updateDoc(docRef, {
       deletedAt: null,
@@ -207,17 +232,24 @@ export const medicalRecordService = {
     });
   },
 
-  delete: async (id: string) => {
+  delete: async (id: string, userId: string) => {
+    // Verificar que el registro pertenece al usuario antes de eliminarlo permanentemente
+    const record = await medicalRecordService.getById(id, userId);
+    if (!record) {
+      throw new Error('Registro no encontrado o no tienes permisos para eliminarlo');
+    }
+    
     const docRef = doc(db, 'medicalRecords', id);
     await deleteDoc(docRef);
   },
 
-  cleanupOldDeleted: async (daysOld: number = 30) => {
+  cleanupOldDeleted: async (userId: string, daysOld: number = 30) => {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysOld);
     
     const q = query(
       collection(db, 'medicalRecords'),
+      where('userId', '==', userId),
       where('deletedAt', '<=', Timestamp.fromDate(cutoffDate))
     );
     

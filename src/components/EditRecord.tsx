@@ -7,6 +7,7 @@ import { medicalRecordService, patientService, storageService } from '../service
 import { pdfService } from '../services/pdfService';
 import { MedicalRecord, Patient } from '../types';
 import { FileText, Download, AlertCircle, CheckCircle, User, Shield, ArrowLeft, Save, Upload, X, File, TestTube, ExternalLink, Receipt, CreditCard } from 'lucide-react';
+import { useUser } from '../contexts/UserContext';
 
 const schema = yup.object({
   name: yup.string().required('El nombre es obligatorio'),
@@ -25,6 +26,7 @@ type FormData = yup.InferType<typeof schema>;
 const EditRecord: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useUser();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -74,9 +76,15 @@ const EditRecord: React.FC = () => {
   const loadRecord = useCallback(async () => {
     try {
       setLoading(true);
-      const recordData = await medicalRecordService.getById(id!);
+      
+      if (!user?.uid) {
+        setError('No se pudo obtener la información del usuario.');
+        return;
+      }
+      
+      const recordData = await medicalRecordService.getById(id!, user.uid);
       if (!recordData) {
-        setError('Registro no encontrado');
+        setError('Registro no encontrado o no tienes permisos para acceder a él');
         return;
       }
 
@@ -104,7 +112,7 @@ const EditRecord: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [id, reset]);
+  }, [id, reset, user]);
 
   useEffect(() => {
     if (id) {
@@ -113,7 +121,7 @@ const EditRecord: React.FC = () => {
   }, [id, loadRecord]);
 
   const onSubmit = async (data: FormData) => {
-    if (!record || !patient) return;
+    if (!record || !patient || !user?.uid) return;
 
     setSaving(true);
     setError('');

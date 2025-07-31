@@ -1,37 +1,54 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { medicalRecordService } from '../services/firebase';
 import { MedicalRecord } from '../types';
 import { Trash2, RotateCcw, Calendar, User, Clock, AlertTriangle, Download, Eye, Wrench } from 'lucide-react';
 import { pdfService } from '../services/pdfService';
+import { useUser } from '../contexts/UserContext';
 
 const Trash: React.FC = () => {
+  const { user } = useUser();
   const [deletedRecords, setDeletedRecords] = useState<MedicalRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [cleaningUp, setCleaningUp] = useState(false);
 
-  useEffect(() => {
-    loadDeletedRecords();
-  }, []);
-
-  const loadDeletedRecords = async () => {
+  const loadDeletedRecords = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await medicalRecordService.getDeleted();
-      setDeletedRecords(data);
+      
+      if (!user?.uid) {
+        setError('No se pudo obtener la información del usuario.');
+        return;
+      }
+      
+      const data = await medicalRecordService.getAll(user.uid, { includeDeleted: true });
+      // Filtrar solo los registros eliminados
+      const deletedData = data.filter(record => record.deletedAt);
+      setDeletedRecords(deletedData);
     } catch (error) {
       console.error('Error cargando registros eliminados:', error);
       setError('Error al cargar los registros eliminados');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user?.uid) {
+      loadDeletedRecords();
+    }
+  }, [user, loadDeletedRecords]);
 
   const restoreRecord = async (record: MedicalRecord) => {
+    if (!user?.uid) {
+      alert('❌ No se pudo obtener la información del usuario.');
+      return;
+    }
+
     if (window.confirm(`¿Estás seguro de que quieres restaurar el registro de ${record.patientName} ${record.patientSurname}?`)) {
       try {
         console.log('Restaurando registro:', record.id);
-        await medicalRecordService.restore(record.id!);
+        await medicalRecordService.restore(record.id!, user.uid);
         alert('✅ Registro restaurado exitosamente');
         loadDeletedRecords(); // Recargar la lista
       } catch (error) {
@@ -42,10 +59,15 @@ const Trash: React.FC = () => {
   };
 
   const permanentlyDeleteRecord = async (record: MedicalRecord) => {
+    if (!user?.uid) {
+      alert('❌ No se pudo obtener la información del usuario.');
+      return;
+    }
+
     if (window.confirm(`¿Estás seguro de que quieres eliminar definitivamente el registro de ${record.patientName} ${record.patientSurname}?\n\n⚠️ Esta acción NO se puede deshacer.`)) {
       try {
         console.log('Eliminando definitivamente:', record.id);
-        await medicalRecordService.delete(record.id!);
+        await medicalRecordService.delete(record.id!, user.uid);
         alert('✅ Registro eliminado definitivamente');
         loadDeletedRecords(); // Recargar la lista
       } catch (error) {
@@ -56,11 +78,16 @@ const Trash: React.FC = () => {
   };
 
   const cleanupOldRecords = async () => {
+    if (!user?.uid) {
+      alert('❌ No se pudo obtener la información del usuario.');
+      return;
+    }
+
     if (window.confirm('¿Estás seguro de que quieres limpiar todos los registros eliminados hace más de 30 días?\n\n⚠️ Esta acción NO se puede deshacer.')) {
       try {
         setCleaningUp(true);
-        const deletedCount = await medicalRecordService.cleanupOldDeleted();
-        alert(`✅ Limpieza completada: ${deletedCount} registros eliminados definitivamente`);
+        await medicalRecordService.cleanupOldDeleted(user.uid);
+        alert('✅ Limpieza completada: registros eliminados definitivamente');
         loadDeletedRecords(); // Recargar la lista
       } catch (error) {
         console.error('Error en limpieza:', error);

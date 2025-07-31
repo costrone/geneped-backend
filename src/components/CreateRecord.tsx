@@ -5,7 +5,8 @@ import * as yup from 'yup';
 import { medicalRecordService, patientService, storageService } from '../services/firebase';
 import { pdfService } from '../services/pdfService';
 import { MedicalRecord } from '../types';
-import { FileText, Download, AlertCircle, CheckCircle, User, Shield, Upload, X, File, TestTube, Receipt, CreditCard } from 'lucide-react';
+import { FileText, Download, AlertCircle, CheckCircle, User, Shield, Upload, X, File, TestTube, Receipt, CreditCard, Lock } from 'lucide-react';
+import { useUser } from '../contexts/UserContext';
 
 const schema = yup.object({
   name: yup.string().required('El nombre es obligatorio'),
@@ -22,12 +23,15 @@ const schema = yup.object({
 type FormData = yup.InferType<typeof schema>;
 
 const CreateRecord: React.FC = () => {
+  const { user } = useUser();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const [generatedPDF, setGeneratedPDF] = useState<File | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [uploadedPDF, setUploadedPDF] = useState<File | null>(null);
+  const [protectingPDF, setProtectingPDF] = useState(false);
 
   const {
     register,
@@ -49,6 +53,46 @@ const CreateRecord: React.FC = () => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Función para manejar la carga de PDF
+  const handlePDFUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type === 'application/pdf') {
+      setUploadedPDF(file);
+    } else if (file) {
+      alert('❌ Por favor, selecciona un archivo PDF válido.');
+    }
+  };
+
+  // Función para eliminar PDF subido
+  const removeUploadedPDF = () => {
+    setUploadedPDF(null);
+  };
+
+  // Función para proteger PDF subido
+  const protectUploadedPDF = async () => {
+    if (!uploadedPDF) return;
+
+    setProtectingPDF(true);
+    try {
+      const password = pdfService.generatePassword(uploadedPDF.name.split('_')[0] || '12345678A');
+      const protectedPDF = await pdfService.generateProtectedPDFFromFile(uploadedPDF, password);
+      
+      // Descargar PDF protegido
+      pdfService.downloadPDF(protectedPDF);
+      
+      alert(`✅ PDF protegido con contraseña: ${password}`);
+      
+      // Mostrar alerta de confidencialidad
+      alert('⚠️ Por motivos de confidencialidad le recomendamos que elimine el archivo subido de su dispositivo.');
+      
+    } catch (error) {
+      console.error('Error protegiendo PDF:', error);
+      alert('❌ Error al proteger el PDF. Por favor, inténtalo de nuevo.');
+    } finally {
+      setProtectingPDF(false);
+    }
+  };
+
   // Función para subir archivos a Firebase Storage
   const uploadFilesToStorage = async (files: File[]): Promise<string[]> => {
     if (files.length === 0) return [];
@@ -68,6 +112,11 @@ const CreateRecord: React.FC = () => {
   };
 
   const onSubmit = async (data: FormData) => {
+    if (!user?.uid) {
+      setError('No se pudo obtener la información del usuario. Por favor, inicia sesión nuevamente.');
+      return;
+    }
+
     setLoading(true);
     setError('');
     setSuccess(false);
@@ -90,6 +139,7 @@ const CreateRecord: React.FC = () => {
 
       // Crear el historial médico
       const record: Omit<MedicalRecord, 'id' | 'createdAt' | 'updatedAt'> = {
+        userId: user.uid, // Incluir el ID del usuario
         patientId,
         patientName: data.name,
         patientSurname: data.surname,
@@ -120,6 +170,7 @@ const CreateRecord: React.FC = () => {
       setSuccess(true);
       reset();
       setUploadedFiles([]);
+      setUploadedPDF(null);
     } catch (error) {
       console.error('Error al crear el historial:', error);
       setError('Error al crear el historial. Por favor, inténtalo de nuevo.');
@@ -304,6 +355,84 @@ const CreateRecord: React.FC = () => {
                 <div className="flex items-center space-x-2 text-primary-600">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
                   <span className="text-sm">Subiendo documentos...</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Subir PDF directamente */}
+          <div className="bg-pastel-gray-light rounded-xl p-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <Lock className="h-5 w-5 text-primary-600" />
+              <h3 className="text-lg font-semibold text-primary-700">Subir PDF Directamente</h3>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-sm text-primary-600 mb-4">
+                Si ya tienes un PDF con la historia clínica, puedes subirlo directamente para protegerlo con contraseña.
+              </p>
+
+              {/* Área de carga de PDF */}
+              <div className="border-2 border-dashed border-pastel-gray-light rounded-xl p-6 text-center hover:border-primary-300 transition-all duration-200">
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={handlePDFUpload}
+                  className="hidden"
+                  id="pdf-upload"
+                />
+                <label htmlFor="pdf-upload" className="cursor-pointer">
+                  <FileText className="h-8 w-8 text-primary-400 mx-auto mb-2" />
+                  <p className="text-sm text-primary-600 mb-1">
+                    <span className="font-medium text-primary-700">Haz clic para subir PDF</span> o arrastra el archivo aquí
+                  </p>
+                  <p className="text-xs text-primary-500">
+                    Solo archivos PDF (máx. 10MB)
+                  </p>
+                </label>
+              </div>
+
+              {/* PDF subido */}
+              {uploadedPDF && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-pastel-gray-light">
+                    <div className="flex items-center space-x-3">
+                      <FileText className="h-4 w-4 text-primary-500" />
+                      <div>
+                        <p className="text-sm font-medium text-primary-700">{uploadedPDF.name}</p>
+                        <p className="text-xs text-primary-500">
+                          {(uploadedPDF.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={protectUploadedPDF}
+                        disabled={protectingPDF}
+                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-xl text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {protectingPDF ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Protegiendo...
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="h-4 w-4 mr-2" />
+                            Proteger PDF
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={removeUploadedPDF}
+                        className="p-1 text-red-500 hover:text-red-700 transition-colors duration-200"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

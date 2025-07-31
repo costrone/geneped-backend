@@ -10,6 +10,7 @@ export interface Patient {
 
 export interface MedicalRecord {
   id?: string;
+  userId: string; // ID del usuario que creó el registro
   patientId: string;
   patientName: string;
   patientSurname: string;
