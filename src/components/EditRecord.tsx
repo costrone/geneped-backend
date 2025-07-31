@@ -163,12 +163,14 @@ const EditRecord: React.FC = () => {
     if (!record) return;
     try {
       // Generar PDF protegido
-      const pdfFile = await pdfService.generateProtectedPDF(record);
+      await pdfService.generateProtectedPDF(record);
       const password = pdfService.generatePassword(record.patientDni);
-      pdfService.downloadPDF(pdfFile);
-      alert(`✅ PDF protegido descargado. Contraseña: ${password}`);
+      // No descargar automáticamente por razones de confidencialidad
+      // pdfService.downloadPDF(pdfFile);
+      alert(`✅ PDF protegido generado. Contraseña: ${password}`);
+      alert('📄 El PDF se puede descargar desde el historial cuando sea necesario.');
     } catch (error) {
-      alert('❌ Error al descargar el PDF protegido.');
+      alert('❌ Error al generar el PDF protegido.');
     }
   };
 

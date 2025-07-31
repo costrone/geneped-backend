@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
+import { useNavigate } from 'react-router-dom';
 import { FileText, Download, AlertCircle, CheckCircle, User, Shield, Upload, X, File, TestTube } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
 import { patientService, medicalRecordService, storageService } from '../services/firebase';
@@ -29,6 +30,7 @@ const CreateRecord: React.FC = () => {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [uploadedPDF, setUploadedPDF] = useState<File | null>(null);
   const [protectingPDF, setProtectingPDF] = useState(false);
+  const navigate = useNavigate();
 
   const {
     register,
@@ -93,7 +95,12 @@ const CreateRecord: React.FC = () => {
   };
 
   const onSubmit = async (data: FormData) => {
+    console.log('=== INICIO onSubmit ===');
+    console.log('Datos del formulario:', data);
+    console.log('Usuario:', user);
+    
     if (!user?.uid) {
+      console.log('ERROR: No hay user.uid');
       setError('No se pudo obtener la información del usuario. Por favor, inicia sesión nuevamente.');
       return;
     }
@@ -104,17 +111,23 @@ const CreateRecord: React.FC = () => {
     setGeneratedPDF(null);
 
     try {
+      console.log('Iniciando creación del registro...');
+      
       let documentUrls: string[] = [];
       if (uploadedFiles.length > 0) {
+        console.log('Subiendo archivos...');
         documentUrls = await storageService.uploadDocuments(uploadedFiles, `temp_${Date.now()}`);
+        console.log('Archivos subidos:', documentUrls);
       }
 
+      console.log('Creando paciente...');
       const patientId = await patientService.create({
         name: data.name,
         surname: data.surname,
         dni: data.dni,
         birthDate: data.birthDate
       });
+      console.log('Paciente creado con ID:', patientId);
 
       // Crear el objeto del registro sin campos undefined
       const recordData: any = {
@@ -140,8 +153,14 @@ const CreateRecord: React.FC = () => {
         recordData.uploadedDocuments = documentUrls;
       }
 
+      console.log('Datos del registro a crear:', recordData);
+      console.log('Llamando a medicalRecordService.create...');
+      
       const recordId = await medicalRecordService.create(recordData);
-      const pdfFile = await pdfService.generateProtectedPDF({
+      console.log('Registro creado con ID:', recordId);
+      
+      console.log('Generando PDF...');
+      await pdfService.generateProtectedPDF({
         ...recordData,
         id: recordId,
         createdAt: new Date(),
@@ -149,15 +168,26 @@ const CreateRecord: React.FC = () => {
       });
 
       const password = recordData.password;
-      pdfService.downloadPDF(pdfFile);
+      // No descargar automáticamente por razones de confidencialidad
+      // pdfService.downloadPDF(pdfFile);
+      
       alert(`✅ Documento generado y protegido con contraseña: ${password}`);
+      alert('✅ Registro creado exitosamente. Redirigiendo al historial...');
+      alert('📄 El PDF se puede descargar desde el historial cuando sea necesario.');
 
       setSuccess(true);
       reset();
       setUploadedFiles([]);
       setUploadedPDF(null);
+      
+      console.log('=== FIN onSubmit - ÉXITO ===');
+      
+      // Navegar al historial después de crear el registro
+      setTimeout(() => {
+        navigate('/history');
+      }, 2000);
     } catch (error) {
-      console.error('Error al crear el historial:', error);
+      console.error('=== ERROR en onSubmit ===', error);
       setError('Error al crear el historial. Por favor, inténtalo de nuevo.');
     } finally {
       setLoading(false);

@@ -293,6 +293,14 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
     }
   };
 
+  const renderReportTypeLogo = (reportType: string) => {
+    return (
+      <span className="text-xs bg-pastel-blue text-primary-700 px-2 py-1 rounded-lg">
+        {reportType}
+      </span>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-64">
@@ -507,9 +515,7 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
                           <span>{formatTime(record.createdAt)}</span>
                         </div>
                         <div className="flex items-center space-x-1">
-                          <span className="text-xs bg-pastel-blue text-primary-700 px-2 py-1 rounded-lg">
-                            {record.reportType}
-                          </span>
+                          {renderReportTypeLogo(record.reportType)}
                         </div>
                         {/* Estado de facturación - versión clickeable */}
                         <div className="flex items-center space-x-2">

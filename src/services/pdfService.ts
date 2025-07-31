@@ -54,12 +54,25 @@ class PDFService {
 
     // Logo y encabezado
     try {
-      const logoResponse = await fetch('/LOGO DEFINITIVO.png');
+      let logoPath = '/LOGO DEFINITIVO.png'; // Logo por defecto
+      
+      // Seleccionar el logo según el tipo de informe
+      if (record.reportType === 'Geneped') {
+        logoPath = '/logo.png';
+      } else if (record.reportType === 'Medicaes') {
+        logoPath = '/Medicaes.png';
+      }
+      
+      const logoResponse = await fetch(logoPath);
       const logoBlob = await logoResponse.blob();
       const logoArrayBuffer = await logoBlob.arrayBuffer();
       const logoBase64 = btoa(String.fromCharCode(...Array.from(new Uint8Array(logoArrayBuffer))));
       
-      doc.addImage(`data:image/png;base64,${logoBase64}`, 'PNG', margin, yPosition, 40, 20);
+      // Calcular dimensiones del logo manteniendo proporciones
+      const logoWidth = 60; // Ancho fijo
+      const logoHeight = 30; // Alto fijo para logos más grandes
+      
+      doc.addImage(`data:image/png;base64,${logoBase64}`, 'PNG', margin, yPosition, logoWidth, logoHeight);
     } catch (error) {
       console.warn('No se pudo cargar el logo:', error);
     }

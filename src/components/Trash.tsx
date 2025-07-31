@@ -140,9 +140,21 @@ ${record.report}
   };
 
   const formatTime = (date: Date | any) => {
-    if (!date) return 'N/A';
-    const dateObj = date instanceof Date ? date : new Date(date);
-    return dateObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    if (date instanceof Date) {
+      return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    }
+    if (date?.toDate) {
+      return date.toDate().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    }
+    return new Date(date).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const renderReportTypeLogo = (reportType: string) => {
+    return (
+      <span className="text-xs bg-pastel-blue text-primary-700 px-2 py-1 rounded-lg">
+        {reportType}
+      </span>
+    );
   };
 
   const getDaysUntilPermanentDeletion = (deletedAt: Date) => {
@@ -254,9 +266,7 @@ ${record.report}
                             <span>{formatTime(record.deletedAt)}</span>
                           </div>
                           <div className="flex items-center space-x-1">
-                            <span className="text-xs bg-pastel-blue text-primary-700 px-2 py-1 rounded-lg">
-                              {record.reportType}
-                            </span>
+                            {renderReportTypeLogo(record.reportType)}
                           </div>
                         </div>
                         

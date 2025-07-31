@@ -44,6 +44,9 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
+// Exportar instancias para uso en otros módulos
+export { db, auth, storage };
+
 // Servicio de autenticación
 export const authService = {
   signIn: async (email: string, password: string) => {
@@ -113,16 +116,22 @@ export const patientService = {
 // Servicio de historiales médicos
 export const medicalRecordService = {
   create: async (record: Omit<MedicalRecord, 'id' | 'createdAt' | 'updatedAt'>) => {
+    console.log('Creando registro médico:', record);
+    
     // Filtrar campos undefined antes de crear el documento
     const cleanRecord = Object.fromEntries(
       Object.entries(record).filter(([_, value]) => value !== undefined)
     );
+    
+    console.log('Registro limpio:', cleanRecord);
     
     const docRef = await addDoc(collection(db, 'medicalRecords'), {
       ...cleanRecord,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now()
     });
+    
+    console.log('Registro creado con ID:', docRef.id);
     return docRef.id;
   },
 
@@ -140,63 +149,60 @@ export const medicalRecordService = {
   },
 
   getAll: async (userId: string, filters?: SearchFilters) => {
-    let q = collection(db, 'medicalRecords');
+    console.log('=== INICIO getAll ===');
+    console.log('Usuario solicitado:', userId);
     
-    // Siempre filtrar por userId para separar historiales por usuario
-    const filterConditions = [where('userId', '==', userId)];
-    
-    // Aplicar filtros adicionales si existen
-    if (filters) {
-      if (filters.name) {
-        filterConditions.push(where('patientName', '>=', filters.name));
-        filterConditions.push(where('patientName', '<=', filters.name + '\uf8ff'));
-      }
+    try {
+      // Consulta simple: obtener todos los documentos sin filtros
+      const simpleQuery = query(collection(db, 'medicalRecords'));
+      const snapshot = await getDocs(simpleQuery);
       
-      if (filters.surname) {
-        filterConditions.push(where('patientSurname', '>=', filters.surname));
-        filterConditions.push(where('patientSurname', '<=', filters.surname + '\uf8ff'));
-      }
+      console.log('Total de documentos en Firestore:', snapshot.docs.length);
       
-      if (filters.dni) {
-        filterConditions.push(where('patientDni', '==', filters.dni));
-      }
+      // Convertir todos los documentos
+      const allRecords = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate(),
+        updatedAt: doc.data().updatedAt?.toDate(),
+        deletedAt: doc.data().deletedAt?.toDate()
+      })) as MedicalRecord[];
       
-      if (filters.dateFrom) {
-        filterConditions.push(where('createdAt', '>=', Timestamp.fromDate(filters.dateFrom)));
-      }
+      console.log('Todos los registros convertidos:', allRecords.length);
       
-      if (filters.dateTo) {
-        filterConditions.push(where('createdAt', '<=', Timestamp.fromDate(filters.dateTo)));
-      }
+      // Mostrar información de cada registro
+      allRecords.forEach((record, index) => {
+        console.log(`Registro ${index + 1}:`, {
+          id: record.id,
+          userId: record.userId,
+          patientName: record.patientName,
+          deletedAt: record.deletedAt
+        });
+      });
       
-      if (filters.keywords) {
-        filterConditions.push(where('report', '>=', filters.keywords));
-        filterConditions.push(where('report', '<=', filters.keywords + '\uf8ff'));
-      }
+      // Filtrar por usuario y no eliminados
+      const userRecords = allRecords.filter(record => {
+        const isUserRecord = !record.userId || record.userId === userId;
+        const isNotDeleted = !record.deletedAt;
+        console.log(`Registro ${record.id}: userId=${record.userId}, deletedAt=${record.deletedAt}, isUserRecord=${isUserRecord}, isNotDeleted=${isNotDeleted}`);
+        return isUserRecord && isNotDeleted;
+      });
       
-      // Por defecto, no incluir registros eliminados
-      if (!filters.includeDeleted) {
-        filterConditions.push(where('deletedAt', '==', null));
-      }
-    } else {
-      // Por defecto, no incluir registros eliminados
-      filterConditions.push(where('deletedAt', '==', null));
+      console.log('Registros filtrados para el usuario:', userRecords.length);
+      
+      // Ordenar por fecha
+      const sortedRecords = userRecords.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      
+      console.log('Registros finales ordenados:', sortedRecords.length);
+      console.log('=== FIN getAll ===');
+      
+      return sortedRecords;
+    } catch (error) {
+      console.error('Error en getAll:', error);
+      throw error;
     }
-    
-    // Crear la consulta final solo con filtros (sin ordenamiento)
-    const finalQuery = query(q, ...filterConditions);
-    
-    const querySnapshot = await getDocs(finalQuery);
-    const records = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate(),
-      updatedAt: doc.data().updatedAt?.toDate(),
-      deletedAt: doc.data().deletedAt?.toDate()
-    })) as MedicalRecord[];
-    
-    // Ordenar en el cliente para evitar problemas de índices
-    return records.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   },
 
   getById: async (id: string, userId: string) => {
