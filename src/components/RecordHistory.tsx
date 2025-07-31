@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { medicalRecordService } from '../services/firebase';
 import { MedicalRecord, SearchFilters } from '../types';
-import { Search, Filter, Download, Eye, Calendar, User, FileText, Clock, Trash2, Edit, Mail, Receipt, CreditCard } from 'lucide-react';
+import { Search, Filter, Download, Eye, Calendar, User, FileText, Clock, Trash2, Edit, Mail, Receipt, CreditCard, RefreshCw } from 'lucide-react';
 import { pdfService } from '../services/pdfService';
 import { useUser } from '../contexts/UserContext';
 
@@ -21,17 +21,24 @@ const RecordHistory: React.FC = () => {
     try {
       setLoading(true);
       setError('');
+      console.log('=== INICIO loadRecords ===');
       console.log('Usuario autenticado:', user?.email);
+      console.log('User ID:', user?.uid);
       console.log('Cargando registros...');
       
       if (!user?.uid) {
+        console.log('ERROR: No hay user.uid');
         setError('No se pudo obtener la información del usuario.');
         return;
       }
       
+      console.log('Llamando a medicalRecordService.getAll...');
       const data = await medicalRecordService.getAll(user.uid);
-      console.log('Registros cargados:', data.length);
+      console.log('Registros cargados:', data);
+      console.log('Número de registros:', data.length);
+      
       setRecords(data);
+      console.log('=== FIN loadRecords ===');
     } catch (error) {
       console.error('Error cargando registros:', error);
       setError(`Error al cargar los registros: ${error instanceof Error ? error.message : 'Error desconocido'}`);
@@ -202,6 +209,40 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
     navigate(`/edit/${record.id}`);
   };
 
+  const toggleInvoiceStatus = async (record: MedicalRecord) => {
+    if (!user?.uid) {
+      alert('❌ No se pudo obtener la información del usuario.');
+      return;
+    }
+
+    try {
+      const newStatus = !record.invoiceIssued;
+      await medicalRecordService.update(record.id!, { invoiceIssued: newStatus });
+      alert(`✅ Estado de facturación actualizado: ${newStatus ? 'Facturado' : 'Sin facturar'}`);
+      loadRecords(); // Recargar la lista
+    } catch (error) {
+      console.error('Error actualizando estado de facturación:', error);
+      alert('❌ Error al actualizar el estado de facturación.');
+    }
+  };
+
+  const togglePaymentStatus = async (record: MedicalRecord) => {
+    if (!user?.uid) {
+      alert('❌ No se pudo obtener la información del usuario.');
+      return;
+    }
+
+    try {
+      const newStatus = !record.paid;
+      await medicalRecordService.update(record.id!, { paid: newStatus });
+      alert(`✅ Estado de pago actualizado: ${newStatus ? 'Pagado' : 'Pendiente'}`);
+      loadRecords(); // Recargar la lista
+    } catch (error) {
+      console.error('Error actualizando estado de pago:', error);
+      alert('❌ Error al actualizar el estado de pago.');
+    }
+  };
+
   const formatDate = (date: Date | any) => {
     if (date instanceof Date) {
       return date.toLocaleDateString('es-ES');
@@ -220,6 +261,36 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
       return date.toDate().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
     }
     return new Date(date).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const testFirestoreConnection = async () => {
+    console.log('=== PRUEBA DE CONEXIÓN FIRESTORE ===');
+    try {
+      // Hacer una consulta directa sin filtros
+      const { collection, getDocs, query } = await import('firebase/firestore');
+      const { db } = await import('../services/firebase');
+      
+      const simpleQuery = query(collection(db, 'medicalRecords'));
+      const snapshot = await getDocs(simpleQuery);
+      
+      console.log('Total de documentos en medicalRecords:', snapshot.docs.length);
+      
+      snapshot.docs.forEach((doc, index) => {
+        const data = doc.data();
+        console.log(`Documento ${index + 1}:`, {
+          id: doc.id,
+          userId: data.userId,
+          patientName: data.patientName,
+          createdAt: data.createdAt?.toDate(),
+          deletedAt: data.deletedAt?.toDate()
+        });
+      });
+      
+      alert(`Encontrados ${snapshot.docs.length} documentos en total. Revisa la consola para más detalles.`);
+    } catch (error) {
+      console.error('Error en prueba de Firestore:', error);
+      alert('Error al conectar con Firestore. Revisa la consola.');
+    }
   };
 
   if (loading) {
@@ -250,13 +321,33 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
               </div>
             </div>
             
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="inline-flex items-center px-4 py-2 border border-white/20 text-sm font-medium rounded-xl text-primary-700 bg-white/90 hover:bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 shadow-gentle hover:shadow-soft"
-            >
-              <Filter className="h-4 w-4 mr-2" />
-              Filtros
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="inline-flex items-center px-4 py-2 border border-white/20 text-sm font-medium rounded-xl text-primary-700 bg-white/90 hover:bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 shadow-gentle hover:shadow-soft"
+              >
+                <Filter className="h-4 w-4 mr-2" />
+                Filtros
+              </button>
+              
+              <button
+                onClick={loadRecords}
+                disabled={loading}
+                className="inline-flex items-center px-4 py-2 border border-white/20 text-sm font-medium rounded-xl text-primary-700 bg-white/90 hover:bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 shadow-gentle hover:shadow-soft disabled:opacity-50"
+                title="Recargar registros"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                Recargar
+              </button>
+              
+              <button
+                onClick={testFirestoreConnection}
+                className="inline-flex items-center px-4 py-2 border border-white/20 text-sm font-medium rounded-xl text-red-600 bg-white/90 hover:bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 shadow-gentle hover:shadow-soft"
+                title="Probar conexión con Firestore"
+              >
+                🔍 Probar
+              </button>
+            </div>
           </div>
         </div>
 
@@ -420,31 +511,39 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
                             {record.reportType}
                           </span>
                         </div>
-                        {/* Estado de facturación - versión compacta */}
+                        {/* Estado de facturación - versión clickeable */}
                         <div className="flex items-center space-x-2">
                           {record.invoiceIssued !== undefined && (
-                            <div className="flex items-center space-x-1">
+                            <button
+                              onClick={() => toggleInvoiceStatus(record)}
+                              className="flex items-center space-x-1 hover:scale-105 transition-transform duration-200"
+                              title={`Hacer clic para cambiar a: ${record.invoiceIssued ? 'Sin facturar' : 'Facturado'}`}
+                            >
                               <Receipt className="h-3 w-3 text-gray-500" />
-                              <span className={`text-xs px-1.5 py-0.5 rounded-md ${
+                              <span className={`text-xs px-1.5 py-0.5 rounded-md cursor-pointer ${
                                 record.invoiceIssued 
-                                  ? 'bg-green-100 text-green-700 border border-green-200' 
-                                  : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                                  ? 'bg-green-100 text-green-700 border border-green-200 hover:bg-green-200' 
+                                  : 'bg-yellow-100 text-yellow-700 border border-yellow-200 hover:bg-yellow-200'
                               }`}>
                                 {record.invoiceIssued ? 'Facturado' : 'Sin facturar'}
                               </span>
-                            </div>
+                            </button>
                           )}
                           {record.paid !== undefined && (
-                            <div className="flex items-center space-x-1">
+                            <button
+                              onClick={() => togglePaymentStatus(record)}
+                              className="flex items-center space-x-1 hover:scale-105 transition-transform duration-200"
+                              title={`Hacer clic para cambiar a: ${record.paid ? 'Pendiente' : 'Pagado'}`}
+                            >
                               <CreditCard className="h-3 w-3 text-gray-500" />
-                              <span className={`text-xs px-1.5 py-0.5 rounded-md ${
+                              <span className={`text-xs px-1.5 py-0.5 rounded-md cursor-pointer ${
                                 record.paid 
-                                  ? 'bg-green-100 text-green-700 border border-green-200' 
-                                  : 'bg-red-100 text-red-700 border border-red-200'
+                                  ? 'bg-green-100 text-green-700 border border-green-200 hover:bg-green-200' 
+                                  : 'bg-red-100 text-red-700 border border-red-200 hover:bg-red-200'
                               }`}>
                                 {record.paid ? 'Pagado' : 'Pendiente'}
                               </span>
-                            </div>
+                            </button>
                           )}
                         </div>
                       </div>
