@@ -1,0 +1,322 @@
+/* Estilos para el editor profesional */
+.professional-editor {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: white;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Contenedor del editor */
+.editor-container {
+  min-height: 500px;
+}
+
+/* Editor nativo con contentEditable */
+.native-editor-wrapper {
+  height: 500px;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background-color: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+}
+
+.toolbar-group:not(:last-child) {
+  border-right: 1px solid #e2e8f0;
+  padding-right: 8px;
+}
+
+.toolbar-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background-color: transparent;
+  border-radius: 6px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toolbar-button:hover {
+  background-color: #e2e8f0;
+  color: #3b82f6;
+}
+
+.toolbar-button:active {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.toolbar-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.preview-button,
+.download-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background-color: white;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  height: 36px;
+}
+
+.preview-button:hover {
+  background-color: #f3f4f6;
+  border-color: #9ca3af;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.download-button {
+  background-color: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.download-button:hover {
+  background-color: #2563eb;
+  border-color: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+.editor-content {
+  flex: 1;
+  padding: 20px;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: 'Times New Roman', serif;
+  font-size: 11pt;
+  line-height: 1.5;
+  color: #333;
+  background-color: white;
+  overflow-y: auto;
+  min-height: 400px;
+}
+
+.editor-content:focus {
+  outline: none;
+}
+
+.editor-content:empty:before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+.editor-content p {
+  margin-bottom: 0.5em;
+  text-align: justify;
+}
+
+.editor-content h1,
+.editor-content h2,
+.editor-content h3 {
+  color: #2c3e50;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.editor-content ul,
+.editor-content ol {
+  margin: 0.5em 0;
+  padding-left: 2em;
+}
+
+.editor-content li {
+  margin-bottom: 0.25em;
+}
+
+/* Vista previa */
+.preview-container {
+  padding: 20px;
+  background-color: #fafafa;
+  min-height: 500px;
+}
+
+.preview-header {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.preview-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 4px 0;
+}
+
+.preview-subtitle {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+  font-style: italic;
+}
+
+.preview-content {
+  background-color: white;
+  padding: 40px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-family: 'Times New Roman', serif;
+  font-size: 11pt;
+  line-height: 1.5;
+  color: #333;
+}
+
+.preview-content h1,
+.preview-content h2,
+.preview-content h3 {
+  color: #2c3e50;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.preview-content p {
+  margin-bottom: 0.5em;
+  text-align: justify;
+}
+
+.preview-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+
+.preview-content table,
+.preview-content th,
+.preview-content td {
+  border: 1px solid #ddd;
+}
+
+.preview-content th,
+.preview-content td {
+  padding: 8px;
+  text-align: left;
+}
+
+.preview-content ul,
+.preview-content ol {
+  margin: 0.5em 0;
+  padding-left: 2em;
+}
+
+.preview-content blockquote {
+  border-left: 4px solid #3498db;
+  margin: 1em 0;
+  padding-left: 1em;
+  font-style: italic;
+}
+
+.preview-content .highlight {
+  background-color: #fff3cd;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .preview-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .preview-content {
+    padding: 20px;
+  }
+  
+  .native-editor-wrapper {
+    height: 400px;
+  }
+  
+  .editor-toolbar {
+    padding: 8px 12px;
+    gap: 4px;
+  }
+  
+  .toolbar-button {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* Animaciones */
+.preview-button,
+.download-button,
+.toolbar-button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.preview-button:active,
+.download-button:active,
+.toolbar-button:active {
+  transform: translateY(0);
+}
+
+/* Estados de carga */
+.preview-button:disabled,
+.download-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Tema de colores pastel */
+.professional-editor {
+  border-color: #e2e8f0;
+}
+
+.preview-button {
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.preview-button:hover {
+  background-color: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.download-button {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+}
+
+.download-button:hover {
+  background-color: #2563eb;
+  border-color: #2563eb;
+} 

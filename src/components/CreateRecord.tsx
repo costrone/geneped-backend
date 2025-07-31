@@ -7,7 +7,7 @@ import { FileText, Download, AlertCircle, CheckCircle, User, Shield, Upload, X, 
 import { useUser } from '../contexts/UserContext';
 import { patientService, medicalRecordService, storageService } from '../services/firebase';
 import { pdfService } from '../services/pdfService';
-import RichTextEditor from './RichTextEditor';
+import ProfessionalEditor from './ProfessionalEditor';
 
 const schema = yup.object({
   name: yup.string().required('El nombre es obligatorio').min(2, 'El nombre debe tener al menos 2 caracteres'),
@@ -530,7 +530,7 @@ const CreateRecord: React.FC = () => {
               <label htmlFor="report" className="block text-sm font-medium text-primary-700 mb-2">
                 Informe Clínico *
               </label>
-              <RichTextEditor
+              <ProfessionalEditor
                 value={watch('report') || ''}
                 onChange={(value) => setValue('report', value)}
                 placeholder="Escribe el informe clínico aquí..."

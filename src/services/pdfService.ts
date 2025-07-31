@@ -297,33 +297,46 @@ class PDFService {
 
   // Función para convertir HTML a texto plano
   private convertHtmlToPlainText(html: string): string {
-    // Crear un elemento temporal para parsear el HTML
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = html;
     
-    // Obtener el texto plano
-    let text = tempDiv.textContent || tempDiv.innerText || '';
+    // Procesar elementos específicos
+    const paragraphs = tempDiv.querySelectorAll('p');
+    paragraphs.forEach(p => {
+      // Asegurar que los párrafos tengan el formato correcto
+      p.style.textAlign = 'justify';
+      p.style.marginBottom = '0.5em';
+    });
     
-    // Limpiar espacios extra y saltos de línea
-    text = text.replace(/\s+/g, ' ').trim();
+    // Convertir a texto manteniendo estructura
+    let plainText = tempDiv.textContent || tempDiv.innerText || '';
     
-    return text;
+    // Limpiar espacios extra y normalizar
+    plainText = plainText
+      .replace(/\s+/g, ' ')
+      .replace(/\n\s*\n/g, '\n') // Eliminar líneas vacías múltiples
+      .trim();
+    
+    return plainText;
   }
 
   // Función para convertir formato markdown y HTML a texto plano
   private convertFormattedTextToPlainText(text: string): string {
-    // Remover formato markdown
+    // Si el texto contiene HTML (del editor profesional), procesarlo
+    if (text.includes('<') && text.includes('>')) {
+      return this.convertHtmlToPlainText(text);
+    }
+    
+    // Si es texto con formato markdown simple, procesarlo
     let plainText = text
       .replace(/\*\*(.*?)\*\*/g, '$1') // Bold
       .replace(/\*(.*?)\*/g, '$1') // Italic
       .replace(/__(.*?)__/g, '$1'); // Underline
     
-    // Remover formato HTML
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = plainText;
     plainText = tempDiv.textContent || tempDiv.innerText || '';
     
-    // Limpiar espacios extra y saltos de línea
     plainText = plainText.replace(/\s+/g, ' ').trim();
     
     return plainText;
