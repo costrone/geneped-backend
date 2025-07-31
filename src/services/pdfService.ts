@@ -68,17 +68,36 @@ class PDFService {
       const logoArrayBuffer = await logoBlob.arrayBuffer();
       const logoBase64 = btoa(String.fromCharCode(...Array.from(new Uint8Array(logoArrayBuffer))));
       
-      // Calcular dimensiones del logo manteniendo proporciones
-      const logoWidth = 60; // Ancho fijo
-      const logoHeight = 30; // Alto fijo para logos más grandes
+      // Crear una imagen temporal para obtener las dimensiones originales
+      const img = new Image();
+      img.src = `data:image/png;base64,${logoBase64}`;
       
-      doc.addImage(`data:image/png;base64,${logoBase64}`, 'PNG', margin, yPosition, logoWidth, logoHeight);
+      await new Promise((resolve) => {
+        img.onload = () => {
+          // Calcular dimensiones manteniendo proporciones originales
+          const maxWidth = 80; // Ancho máximo
+          const maxHeight = 40; // Alto máximo
+          
+          const { width, height } = this.calculateImageDimensions(
+            img.width,
+            img.height,
+            maxWidth,
+            maxHeight
+          );
+          
+          // Centrar el logo horizontalmente
+          const logoX = (pageWidth - width) / 2;
+          
+          doc.addImage(`data:image/png;base64,${logoBase64}`, 'PNG', logoX, yPosition, width, height);
+          resolve(null);
+        };
+      });
     } catch (error) {
       console.warn('No se pudo cargar el logo:', error);
     }
 
     // Título del informe
-    yPosition += 30;
+    yPosition += 45;
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.text('INFORME CLÍNICO', pageWidth / 2, yPosition, { align: 'center' });
