@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import { medicalRecordService, patientService } from '../services/firebase';
+import { medicalRecordService, patientService, storageService } from '../services/firebase';
 import { pdfService } from '../services/pdfService';
 import { MedicalRecord } from '../types';
-import { FileText, Download, AlertCircle, CheckCircle, User, Shield } from 'lucide-react';
+import { FileText, Download, AlertCircle, CheckCircle, User, Shield, Upload, X, File, TestTube, Receipt, CreditCard } from 'lucide-react';
 
 const schema = yup.object({
   name: yup.string().required('El nombre es obligatorio'),
@@ -13,7 +13,10 @@ const schema = yup.object({
   dni: yup.string().required('El DNI es obligatorio').matches(/^\d{8}[A-Z]$/, 'DNI debe tener 8 dígitos y una letra'),
   birthDate: yup.string().required('La fecha de nacimiento es obligatoria'),
   reportType: yup.string().oneOf(['Geneped', 'Medicaes'], 'Debe seleccionar un tipo de informe').required('El tipo de informe es obligatorio'),
-  report: yup.string().required('El informe clínico es obligatorio').min(10, 'El informe clínico debe tener al menos 10 caracteres')
+  report: yup.string().required('El informe clínico es obligatorio').min(10, 'El informe clínico debe tener al menos 10 caracteres'),
+  requestedTests: yup.string().optional(),
+  invoiceIssued: yup.boolean().optional(),
+  paid: yup.boolean().optional()
 }).required();
 
 type FormData = yup.InferType<typeof schema>;
@@ -23,6 +26,8 @@ const CreateRecord: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const [generatedPDF, setGeneratedPDF] = useState<File | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
 
   const {
     register,
@@ -33,6 +38,35 @@ const CreateRecord: React.FC = () => {
     resolver: yupResolver(schema)
   });
 
+  // Función para manejar la carga de archivos
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    setUploadedFiles(prev => [...prev, ...files]);
+  };
+
+  // Función para eliminar un archivo
+  const removeFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Función para subir archivos a Firebase Storage
+  const uploadFilesToStorage = async (files: File[]): Promise<string[]> => {
+    if (files.length === 0) return [];
+    
+    setUploadingFiles(true);
+    try {
+      // Crear un ID temporal para el paciente (se usará para organizar los archivos)
+      const tempPatientId = `temp_${Date.now()}`;
+      const urls = await storageService.uploadDocuments(files, tempPatientId);
+      return urls;
+    } catch (error) {
+      console.error('Error subiendo archivos:', error);
+      throw new Error('Error al subir los documentos');
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
+
   const onSubmit = async (data: FormData) => {
     setLoading(true);
     setError('');
@@ -40,6 +74,12 @@ const CreateRecord: React.FC = () => {
     setGeneratedPDF(null);
 
     try {
+      // Subir archivos si existen
+      let documentUrls: string[] = [];
+      if (uploadedFiles.length > 0) {
+        documentUrls = await uploadFilesToStorage(uploadedFiles);
+      }
+
       // Crear el paciente
       const patientId = await patientService.create({
         name: data.name,
@@ -57,6 +97,10 @@ const CreateRecord: React.FC = () => {
         patientBirthDate: data.birthDate,
         reportType: data.reportType,
         report: data.report,
+        requestedTests: data.requestedTests || undefined,
+        uploadedDocuments: documentUrls.length > 0 ? documentUrls : undefined,
+        invoiceIssued: data.invoiceIssued,
+        paid: data.paid,
         password: pdfService.generatePassword(data.dni)
       };
 
@@ -75,6 +119,7 @@ const CreateRecord: React.FC = () => {
       alert(`✅ Documento generado y protegido con contraseña: ${password}`);
       setSuccess(true);
       reset();
+      setUploadedFiles([]);
     } catch (error) {
       console.error('Error al crear el historial:', error);
       setError('Error al crear el historial. Por favor, inténtalo de nuevo.');
@@ -199,6 +244,130 @@ const CreateRecord: React.FC = () => {
             </div>
           </div>
 
+          {/* Carga de documentos */}
+          <div className="bg-pastel-gray-light rounded-xl p-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <Upload className="h-5 w-5 text-primary-600" />
+              <h3 className="text-lg font-semibold text-primary-700">Documentos Adjuntos</h3>
+            </div>
+
+            <div className="space-y-4">
+              {/* Área de carga */}
+              <div className="border-2 border-dashed border-pastel-gray-light rounded-xl p-6 text-center hover:border-primary-300 transition-all duration-200">
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id="file-upload"
+                />
+                <label htmlFor="file-upload" className="cursor-pointer">
+                  <Upload className="h-8 w-8 text-primary-400 mx-auto mb-2" />
+                  <p className="text-sm text-primary-600 mb-1">
+                    <span className="font-medium text-primary-700">Haz clic para subir</span> o arrastra los archivos aquí
+                  </p>
+                  <p className="text-xs text-primary-500">
+                    PDF, DOC, DOCX, JPG, PNG (máx. 10MB por archivo)
+                  </p>
+                </label>
+              </div>
+
+              {/* Lista de archivos subidos */}
+              {uploadedFiles.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-primary-700">Archivos subidos:</h4>
+                  {uploadedFiles.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border border-pastel-gray-light">
+                      <div className="flex items-center space-x-3">
+                        <File className="h-4 w-4 text-primary-500" />
+                        <div>
+                          <p className="text-sm font-medium text-primary-700">{file.name}</p>
+                          <p className="text-xs text-primary-500">
+                            {(file.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(index)}
+                        className="p-1 text-red-500 hover:text-red-700 transition-colors duration-200"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {uploadingFiles && (
+                <div className="flex items-center space-x-2 text-primary-600">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+                  <span className="text-sm">Subiendo documentos...</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Pruebas solicitadas */}
+          <div className="bg-pastel-gray-light rounded-xl p-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <TestTube className="h-5 w-5 text-primary-600" />
+              <h3 className="text-lg font-semibold text-primary-700">Pruebas Solicitadas</h3>
+            </div>
+
+            <div>
+              <label htmlFor="requestedTests" className="block text-sm font-medium text-primary-700 mb-2">
+                Pruebas solicitadas
+              </label>
+              <textarea
+                id="requestedTests"
+                {...register('requestedTests')}
+                rows={3}
+                className="w-full px-4 py-3 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 resize-none"
+                placeholder="Especifica las pruebas solicitadas para el paciente..."
+              />
+            </div>
+          </div>
+
+          {/* Estado de facturación y pago */}
+          <div className="bg-pastel-gray-light rounded-xl p-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <Receipt className="h-5 w-5 text-primary-600" />
+              <h3 className="text-lg font-semibold text-primary-700">Estado de Facturación</h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="flex items-center space-x-3 p-4 border border-pastel-gray-light rounded-xl cursor-pointer hover:bg-white transition-all duration-200">
+                  <input
+                    type="checkbox"
+                    {...register('invoiceIssued')}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-pastel-gray-light rounded"
+                  />
+                  <div className="flex items-center space-x-3">
+                    <Receipt className="h-5 w-5 text-primary-600" />
+                    <span className="text-sm font-medium text-primary-700">Factura emitida</span>
+                  </div>
+                </label>
+              </div>
+
+              <div>
+                <label className="flex items-center space-x-3 p-4 border border-pastel-gray-light rounded-xl cursor-pointer hover:bg-white transition-all duration-200">
+                  <input
+                    type="checkbox"
+                    {...register('paid')}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-pastel-gray-light rounded"
+                  />
+                  <div className="flex items-center space-x-3">
+                    <CreditCard className="h-5 w-5 text-primary-600" />
+                    <span className="text-sm font-medium text-primary-700">Pagado</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+
           {/* Tipo de informe */}
           <div className="bg-pastel-gray-light rounded-xl p-6">
             <div className="flex items-center space-x-2 mb-4">
@@ -304,7 +473,7 @@ const CreateRecord: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || uploadingFiles}
                 className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-xl text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-gentle hover:shadow-soft"
               >
                 {loading ? (

@@ -17,6 +17,10 @@ export interface MedicalRecord {
   patientBirthDate: string;
   reportType: 'Geneped' | 'Medicaes';
   report: string;
+  requestedTests?: string; // Campo para las pruebas solicitadas
+  uploadedDocuments?: string[]; // Array de URLs de documentos subidos
+  invoiceIssued?: boolean; // Factura emitida (sí/no)
+  paid?: boolean; // Pagado (sí/no)
   pdfUrl?: string;
   password: string;
   createdAt: Date;
@@ -31,5 +35,7 @@ export interface SearchFilters {
   dateFrom?: Date;
   dateTo?: Date;
   keywords?: string;
+  invoiceIssued?: boolean; // Filtro por factura emitida
+  paid?: boolean; // Filtro por pagado
   includeDeleted?: boolean; // Para incluir registros eliminados en búsquedas
 } 

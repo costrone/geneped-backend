@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { medicalRecordService } from '../services/firebase';
 import { MedicalRecord, SearchFilters } from '../types';
-import { Search, Filter, Download, Eye, Calendar, User, FileText, Clock, Trash2, Edit, Mail } from 'lucide-react';
+import { Search, Filter, Download, Eye, Calendar, User, FileText, Clock, Trash2, Edit, Mail, Receipt, CreditCard } from 'lucide-react';
 import { pdfService } from '../services/pdfService';
 import { useUser } from '../contexts/UserContext';
 
@@ -34,7 +34,7 @@ const RecordHistory: React.FC = () => {
     }
   }, [user]);
 
-  const handleFilterChange = (key: keyof SearchFilters, value: string | Date | undefined) => {
+  const handleFilterChange = (key: keyof SearchFilters, value: string | Date | boolean | undefined) => {
     setFilters(prev => ({
       ...prev,
       [key]: value
@@ -80,6 +80,20 @@ const RecordHistory: React.FC = () => {
       );
     }
 
+    // Filtro por factura emitida
+    if (filters.invoiceIssued !== undefined) {
+      filtered = filtered.filter(record =>
+        record.invoiceIssued === filters.invoiceIssued
+      );
+    }
+
+    // Filtro por pagado
+    if (filters.paid !== undefined) {
+      filtered = filtered.filter(record =>
+        record.paid === filters.paid
+      );
+    }
+
     // Ordenar por fecha de creación (más reciente primero)
     filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -106,7 +120,6 @@ const RecordHistory: React.FC = () => {
 
   const downloadPDF = async (record: MedicalRecord) => {
     try {
-      // Generar PDF protegido
       const pdfFile = await pdfService.generateProtectedPDF(record);
       const password = pdfService.generatePassword(record.patientDni);
       pdfService.downloadPDF(pdfFile);
@@ -117,80 +130,85 @@ const RecordHistory: React.FC = () => {
   };
 
   const sendProtectedEmail = async (record: MedicalRecord) => {
-    const email = prompt(`Introduce el email para enviar el informe de ${record.patientName} ${record.patientSurname}:`);
-    
-    if (!email) return;
-    
-    if (!email.includes('@')) {
-      alert('❌ Por favor, introduce un email válido.');
+    if (!user?.email) {
+      alert('❌ Error: No se pudo obtener tu email de usuario.');
       return;
     }
 
     try {
       setSendingEmail(record.id!);
-      await pdfService.sendProtectedPDFByEmail(record, email, user?.email || '');
+      const recipientEmail = prompt('Introduce el email del destinatario:');
+      
+      if (!recipientEmail) {
+        setSendingEmail(null);
+        return;
+      }
+
+      await pdfService.sendProtectedPDFByEmail(record, recipientEmail, user.email);
+      alert('✅ Email enviado exitosamente con enlace de descarga.');
     } catch (error) {
       console.error('Error enviando email:', error);
-      alert('❌ Error al enviar el email. Por favor, inténtalo de nuevo.');
+      alert(`❌ Error enviando email: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     } finally {
       setSendingEmail(null);
     }
   };
 
   const viewRecord = (record: MedicalRecord) => {
-    console.log('Viendo registro:', record.id);
-    
-    // Mostrar detalles del registro en un modal o alert
-    const details = `
-📋 DETALLES DEL REGISTRO
+    const message = `
+📋 **Detalles del Registro Médico**
 
-👤 Paciente: ${record.patientName} ${record.patientSurname}
-🆔 DNI: ${record.patientDni}
-📅 Fecha de Nacimiento: ${new Date(record.patientBirthDate).toLocaleDateString('es-ES')}
-📅 Fecha del Informe: ${formatDate(record.createdAt)}
-🕐 Hora: ${formatTime(record.createdAt)}
-🏥 Tipo: ${record.reportType}
-
-📝 INFORME CLÍNICO:
-${record.report}
-
-🔐 Contraseña para protección: ${pdfService.generatePassword(record.patientDni)}
+👤 **Paciente:** ${record.patientName} ${record.patientSurname}
+🆔 **DNI:** ${record.patientDni}
+📅 **Fecha de nacimiento:** ${new Date(record.patientBirthDate).toLocaleDateString('es-ES')}
+📊 **Tipo de informe:** ${record.reportType}
+📝 **Informe clínico:** ${record.report.substring(0, 200)}...
+📅 **Fecha de creación:** ${formatDate(record.createdAt)}
+⏰ **Hora:** ${formatTime(record.createdAt)}
+${record.requestedTests ? `🧪 **Pruebas solicitadas:** ${record.requestedTests}` : ''}
+${record.uploadedDocuments && record.uploadedDocuments.length > 0 ? `📎 **Documentos adjuntos:** ${record.uploadedDocuments.length} archivo(s)` : ''}
+${record.invoiceIssued !== undefined ? `🧾 **Factura emitida:** ${record.invoiceIssued ? 'Sí' : 'No'}` : ''}
+${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` : ''}
     `;
     
-    alert(details);
+    alert(message);
   };
 
   const deleteRecord = async (record: MedicalRecord) => {
-    if (window.confirm(`¿Estás seguro de que quieres mover a la papelera el registro de ${record.patientName} ${record.patientSurname}?\n\nEl registro se podrá recuperar durante 30 días desde la papelera.`)) {
+    if (window.confirm(`¿Estás seguro de que quieres eliminar el registro de ${record.patientName} ${record.patientSurname}?`)) {
       try {
-        // Soft delete - mover a papelera
-        console.log('Moviendo a papelera:', record.id);
         await medicalRecordService.softDelete(record.id!);
-        alert('✅ Registro movido a la papelera exitosamente');
-        loadRecords(); // Recargar la lista
+        await loadRecords();
+        alert('✅ Registro eliminado exitosamente.');
       } catch (error) {
-        console.error('Error moviendo a papelera:', error);
-        alert('❌ Error al mover el registro a la papelera. Por favor, inténtalo de nuevo.');
+        console.error('Error eliminando registro:', error);
+        alert('❌ Error eliminando el registro.');
       }
     }
   };
 
   const editRecord = (record: MedicalRecord) => {
-    console.log('Editando registro:', record.id);
-    // Navegar a la página de edición
     navigate(`/edit/${record.id}`);
   };
 
   const formatDate = (date: Date | any) => {
-    if (!date) return 'N/A';
-    const dateObj = date instanceof Date ? date : new Date(date);
-    return dateObj.toLocaleDateString('es-ES');
+    if (date instanceof Date) {
+      return date.toLocaleDateString('es-ES');
+    }
+    if (date?.toDate) {
+      return date.toDate().toLocaleDateString('es-ES');
+    }
+    return new Date(date).toLocaleDateString('es-ES');
   };
 
   const formatTime = (date: Date | any) => {
-    if (!date) return 'N/A';
-    const dateObj = date instanceof Date ? date : new Date(date);
-    return dateObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    if (date instanceof Date) {
+      return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    }
+    if (date?.toDate) {
+      return date.toDate().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    }
+    return new Date(date).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
   };
 
   if (loading) {
@@ -234,7 +252,7 @@ ${record.report}
         {/* Filtros */}
         {showFilters && (
           <div className="px-8 py-6 border-b border-pastel-gray-light bg-pastel-gray-light">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-primary-700 mb-2">Nombre</label>
                 <input
@@ -269,6 +287,17 @@ ${record.report}
               </div>
 
               <div>
+                <label className="block text-sm font-medium text-primary-700 mb-2">Palabras clave</label>
+                <input
+                  type="text"
+                  value={filters.keywords || ''}
+                  onChange={(e) => handleFilterChange('keywords', e.target.value || undefined)}
+                  className="w-full px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  placeholder="Buscar en el informe..."
+                />
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-primary-700 mb-2">Fecha desde</label>
                 <input
                   type="date"
@@ -289,14 +318,35 @@ ${record.report}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-primary-700 mb-2">Palabras clave</label>
-                <input
-                  type="text"
-                  value={filters.keywords || ''}
-                  onChange={(e) => handleFilterChange('keywords', e.target.value || undefined)}
+                <label className="block text-sm font-medium text-primary-700 mb-2">
+                  <Receipt className="h-4 w-4 inline mr-1" />
+                  Factura emitida
+                </label>
+                <select
+                  value={filters.invoiceIssued === undefined ? '' : filters.invoiceIssued ? 'true' : 'false'}
+                  onChange={(e) => handleFilterChange('invoiceIssued', e.target.value === '' ? undefined : e.target.value === 'true')}
                   className="w-full px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
-                  placeholder="Buscar en el informe..."
-                />
+                >
+                  <option value="">Todos</option>
+                  <option value="true">Sí</option>
+                  <option value="false">No</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-primary-700 mb-2">
+                  <CreditCard className="h-4 w-4 inline mr-1" />
+                  Pagado
+                </label>
+                <select
+                  value={filters.paid === undefined ? '' : filters.paid ? 'true' : 'false'}
+                  onChange={(e) => handleFilterChange('paid', e.target.value === '' ? undefined : e.target.value === 'true')}
+                  className="w-full px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                >
+                  <option value="">Todos</option>
+                  <option value="true">Sí</option>
+                  <option value="false">No</option>
+                </select>
               </div>
             </div>
 
@@ -359,6 +409,30 @@ ${record.report}
                             {record.reportType}
                           </span>
                         </div>
+                        {record.invoiceIssued !== undefined && (
+                          <div className="flex items-center space-x-1">
+                            <Receipt className="h-4 w-4" />
+                            <span className={`text-xs px-2 py-1 rounded-lg ${
+                              record.invoiceIssued 
+                                ? 'bg-green-100 text-green-700' 
+                                : 'bg-yellow-100 text-yellow-700'
+                            }`}>
+                              {record.invoiceIssued ? 'Facturado' : 'Sin facturar'}
+                            </span>
+                          </div>
+                        )}
+                        {record.paid !== undefined && (
+                          <div className="flex items-center space-x-1">
+                            <CreditCard className="h-4 w-4" />
+                            <span className={`text-xs px-2 py-1 rounded-lg ${
+                              record.paid 
+                                ? 'bg-green-100 text-green-700' 
+                                : 'bg-red-100 text-red-700'
+                            }`}>
+                              {record.paid ? 'Pagado' : 'Pendiente'}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       
                       <p className="text-sm text-pastel-gray-dark line-clamp-2 leading-relaxed">

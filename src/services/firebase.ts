@@ -1,260 +1,261 @@
+import { initializeApp } from 'firebase/app';
 import { 
+  getAuth, 
+  signInWithEmailAndPassword, 
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+  User as FirebaseUser 
+} from 'firebase/auth';
+import { 
+  getFirestore, 
   collection, 
   addDoc, 
   getDocs, 
+  doc, 
+  updateDoc, 
+  deleteDoc, 
   query, 
   where, 
   orderBy, 
-  doc, 
-  getDoc, 
-  deleteDoc,
-  updateDoc
+  Timestamp,
+  writeBatch 
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase/config';
+import { 
+  getStorage, 
+  ref, 
+  uploadBytes, 
+  getDownloadURL,
+  deleteObject 
+} from 'firebase/storage';
 import { Patient, MedicalRecord, SearchFilters } from '../types';
 
-export const patientService = {
-  async create(patient: Omit<Patient, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
-    const docRef = await addDoc(collection(db, 'patients'), {
-      ...patient,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
-    return docRef.id;
+// Configuración de Firebase
+const firebaseConfig = {
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID
+};
+
+// Inicializar Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+// Servicio de autenticación
+export const authService = {
+  signIn: async (email: string, password: string) => {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    return userCredential.user;
   },
 
-  async getAll(): Promise<Patient[]> {
-    const querySnapshot = await getDocs(collection(db, 'patients'));
-    return querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data,
-        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
-        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt)
-      };
-    }) as Patient[];
+  signOut: async () => {
+    await firebaseSignOut(auth);
   },
 
-  async getById(id: string): Promise<Patient | null> {
-    const docRef = doc(db, 'patients', id);
-    const docSnap = await getDoc(docRef);
-
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      return {
-        id: docSnap.id,
-        ...data,
-        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
-        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt)
-      } as Patient;
-    }
-    return null;
+  onAuthStateChanged: (callback: (user: FirebaseUser | null) => void) => {
+    return onAuthStateChanged(auth, callback);
   },
 
-  async update(id: string, updates: Partial<Omit<Patient, 'id' | 'createdAt' | 'updatedAt'>>): Promise<void> {
-    const docRef = doc(db, 'patients', id);
-    await updateDoc(docRef, {
-      ...updates,
-      updatedAt: new Date()
-    });
+  getCurrentUser: () => {
+    return auth.currentUser;
   }
 };
 
-export const medicalRecordService = {
-  async create(record: Omit<MedicalRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
-    const docRef = await addDoc(collection(db, 'medicalRecords'), {
-      ...record,
-      createdAt: new Date(),
-      updatedAt: new Date()
+// Servicio de pacientes
+export const patientService = {
+  create: async (patient: Omit<Patient, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const docRef = await addDoc(collection(db, 'patients'), {
+      ...patient,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
     });
     return docRef.id;
   },
 
-  async getAll(includeDeleted: boolean = false): Promise<MedicalRecord[]> {
-    try {
-      console.log('Iniciando getAll...');
-      
-      // Consulta simple sin filtros complejos
-      const q = query(collection(db, 'medicalRecords'));
-      console.log('Query creada');
-      
-      const querySnapshot = await getDocs(q);
-      console.log('QuerySnapshot obtenida, docs:', querySnapshot.docs.length);
-      
-      const records = querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        console.log('Procesando doc:', doc.id, data);
-        return {
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
-          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt),
-          deletedAt: data.deletedAt?.toDate ? data.deletedAt.toDate() : data.deletedAt ? new Date(data.deletedAt) : undefined
-        };
-      }) as MedicalRecord[];
-
-      console.log('Registros procesados:', records.length);
-
-      // Filtrar en el cliente para registros no eliminados
-      if (!includeDeleted) {
-        const filteredRecords = records.filter(record => !record.deletedAt);
-        console.log('Registros filtrados (no eliminados):', filteredRecords.length);
-        return filteredRecords;
-      }
-
-      return records;
-    } catch (error) {
-      console.error('Error en getAll:', error);
-      throw error;
-    }
+  update: async (id: string, updates: Partial<Patient>) => {
+    const docRef = doc(db, 'patients', id);
+    await updateDoc(docRef, {
+      ...updates,
+      updatedAt: Timestamp.now()
+    });
   },
 
-  async getDeleted(): Promise<MedicalRecord[]> {
-    const q = query(
-      collection(db, 'medicalRecords'), 
-      where('deletedAt', '!=', null),
-      orderBy('deletedAt', 'desc')
-    );
+  getAll: async () => {
+    const querySnapshot = await getDocs(collection(db, 'patients'));
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      createdAt: doc.data().createdAt?.toDate(),
+      updatedAt: doc.data().updatedAt?.toDate()
+    })) as Patient[];
+  }
+};
+
+// Servicio de historiales médicos
+export const medicalRecordService = {
+  create: async (record: Omit<MedicalRecord, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const docRef = await addDoc(collection(db, 'medicalRecords'), {
+      ...record,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
+    });
+    return docRef.id;
+  },
+
+  update: async (id: string, updates: Partial<MedicalRecord>) => {
+    const docRef = doc(db, 'medicalRecords', id);
+    await updateDoc(docRef, {
+      ...updates,
+      updatedAt: Timestamp.now()
+    });
+  },
+
+  getAll: async (filters?: SearchFilters) => {
+    let q = collection(db, 'medicalRecords');
+    
+    // Aplicar filtros si existen
+    if (filters) {
+      const conditions = [];
+      
+      if (filters.name) {
+        conditions.push(where('patientName', '>=', filters.name));
+        conditions.push(where('patientName', '<=', filters.name + '\uf8ff'));
+      }
+      
+      if (filters.surname) {
+        conditions.push(where('patientSurname', '>=', filters.surname));
+        conditions.push(where('patientSurname', '<=', filters.surname + '\uf8ff'));
+      }
+      
+      if (filters.dni) {
+        conditions.push(where('patientDni', '==', filters.dni));
+      }
+      
+      if (filters.dateFrom) {
+        conditions.push(where('createdAt', '>=', Timestamp.fromDate(filters.dateFrom)));
+      }
+      
+      if (filters.dateTo) {
+        conditions.push(where('createdAt', '<=', Timestamp.fromDate(filters.dateTo)));
+      }
+      
+      if (filters.keywords) {
+        conditions.push(where('report', '>=', filters.keywords));
+        conditions.push(where('report', '<=', filters.keywords + '\uf8ff'));
+      }
+      
+      // Por defecto, no incluir registros eliminados
+      if (!filters.includeDeleted) {
+        conditions.push(where('deletedAt', '==', null));
+      }
+      
+      if (conditions.length > 0) {
+        q = query(q, ...conditions, orderBy('createdAt', 'desc'));
+      } else {
+        q = query(q, orderBy('createdAt', 'desc'));
+      }
+    } else {
+      // Por defecto, no incluir registros eliminados
+      q = query(q, where('deletedAt', '==', null), orderBy('createdAt', 'desc'));
+    }
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data,
-        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
-        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt),
-        deletedAt: data.deletedAt?.toDate ? data.deletedAt.toDate() : new Date(data.deletedAt)
-      };
-    }) as MedicalRecord[];
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      createdAt: doc.data().createdAt?.toDate(),
+      updatedAt: doc.data().updatedAt?.toDate(),
+      deletedAt: doc.data().deletedAt?.toDate()
+    })) as MedicalRecord[];
   },
 
-  async search(filters: SearchFilters): Promise<MedicalRecord[]> {
-    let q = query(collection(db, 'medicalRecords'), orderBy('createdAt', 'desc'));
-
-    // Solo incluir registros no eliminados por defecto
-    if (!filters.includeDeleted) {
-      q = query(q, where('deletedAt', '==', null));
-    }
-
-    if (filters.name) {
-      q = query(q, where('patientName', '>=', filters.name), where('patientName', '<=', filters.name + '\uf8ff'));
-    }
-
-    if (filters.surname) {
-      q = query(q, where('patientSurname', '>=', filters.surname), where('patientSurname', '<=', filters.surname + '\uf8ff'));
-    }
-
-    if (filters.dni) {
-      q = query(q, where('patientDni', '==', filters.dni));
-    }
-
-    if (filters.dateFrom) {
-      q = query(q, where('createdAt', '>=', filters.dateFrom));
-    }
-
-    if (filters.dateTo) {
-      q = query(q, where('createdAt', '<=', filters.dateTo));
-    }
-
-    const querySnapshot = await getDocs(q);
-    let records = querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data,
-        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
-        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt),
-        deletedAt: data.deletedAt?.toDate ? data.deletedAt.toDate() : data.deletedAt ? new Date(data.deletedAt) : undefined
-      };
-    }) as MedicalRecord[];
-
-    // Filtro por palabras clave en el reporte
-    if (filters.keywords) {
-      const keywords = filters.keywords.toLowerCase();
-      records = records.filter(record =>
-        record.report.toLowerCase().includes(keywords)
-      );
-    }
-
-    return records;
-  },
-
-  async getById(id: string): Promise<MedicalRecord | null> {
+  getById: async (id: string) => {
     const docRef = doc(db, 'medicalRecords', id);
-    const docSnap = await getDoc(docRef);
-
-    if (docSnap.exists()) {
-      const data = docSnap.data();
+    const docSnap = await getDocs(query(collection(db, 'medicalRecords'), where('__name__', '==', id)));
+    
+    if (!docSnap.empty) {
+      const docData = docSnap.docs[0].data();
       return {
-        id: docSnap.id,
-        ...data,
-        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
-        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt),
-        deletedAt: data.deletedAt?.toDate ? data.deletedAt.toDate() : data.deletedAt ? new Date(data.deletedAt) : undefined
+        id: docSnap.docs[0].id,
+        ...docData,
+        createdAt: docData.createdAt?.toDate(),
+        updatedAt: docData.updatedAt?.toDate(),
+        deletedAt: docData.deletedAt?.toDate()
       } as MedicalRecord;
     }
+    
     return null;
   },
 
-  // Soft delete - mover a papelera
-  async softDelete(id: string): Promise<void> {
+  softDelete: async (id: string) => {
     const docRef = doc(db, 'medicalRecords', id);
     await updateDoc(docRef, {
-      deletedAt: new Date(),
-      updatedAt: new Date()
+      deletedAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
     });
   },
 
-  // Recuperar de la papelera
-  async restore(id: string): Promise<void> {
+  restore: async (id: string) => {
     const docRef = doc(db, 'medicalRecords', id);
     await updateDoc(docRef, {
       deletedAt: null,
-      updatedAt: new Date()
+      updatedAt: Timestamp.now()
     });
   },
 
-  // Eliminación definitiva
-  async delete(id: string): Promise<void> {
+  delete: async (id: string) => {
     const docRef = doc(db, 'medicalRecords', id);
     await deleteDoc(docRef);
   },
 
-  // Limpiar registros eliminados hace más de 30 días
-  async cleanupOldDeleted(): Promise<number> {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
+  cleanupOldDeleted: async (daysOld: number = 30) => {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+    
     const q = query(
       collection(db, 'medicalRecords'),
-      where('deletedAt', '!=', null),
-      where('deletedAt', '<', thirtyDaysAgo)
+      where('deletedAt', '<=', Timestamp.fromDate(cutoffDate))
     );
-
+    
     const querySnapshot = await getDocs(q);
-    const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
-    await Promise.all(deletePromises);
-
-    return querySnapshot.docs.length;
-  },
-
-  // Actualizar registro médico
-  async update(id: string, updates: Partial<Omit<MedicalRecord, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>>): Promise<void> {
-    const docRef = doc(db, 'medicalRecords', id);
-    await updateDoc(docRef, {
-      ...updates,
-      updatedAt: new Date()
+    const batch = writeBatch(db);
+    
+    querySnapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
     });
+    
+    await batch.commit();
   }
 };
 
+// Servicio de almacenamiento de archivos
 export const storageService = {
-  async uploadPDF(file: File, patientId: string): Promise<string> {
-    const storageRef = ref(storage, `pdfs/${patientId}/${file.name}`);
-    await uploadBytes(storageRef, file);
-    return await getDownloadURL(storageRef);
+  uploadFile: async (file: File, path: string): Promise<string> => {
+    const storageRef = ref(storage, path);
+    const snapshot = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    return downloadURL;
+  },
+
+  deleteFile: async (url: string) => {
+    try {
+      const storageRef = ref(storage, url);
+      await deleteObject(storageRef);
+    } catch (error) {
+      console.error('Error eliminando archivo:', error);
+    }
+  },
+
+  uploadDocuments: async (files: File[], patientId: string): Promise<string[]> => {
+    const uploadPromises = files.map(async (file, index) => {
+      const fileName = `documents/${patientId}/${Date.now()}_${index}_${file.name}`;
+      return await storageService.uploadFile(file, fileName);
+    });
+    
+    return await Promise.all(uploadPromises);
   }
 }; 

@@ -67,7 +67,7 @@ export const pdfService = {
       // Encabezado en negrita más cerca del logo
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(18);
-      doc.text('GENÉTICA MÉDICA Y ASESORAMIENTO GENÉTICO', 105, 50, { align: 'center' });
+      doc.text('GENÉTICA MÉDICA Y ASESORAMIENTO GENÉTICO', 105, 75, { align: 'center' });
       doc.text('INFORME CLÍNICO', 105, 85, { align: 'center' });
 
       // Fecha de generación (solo la fecha, alineada a la derecha)
@@ -103,10 +103,74 @@ export const pdfService = {
       doc.text(`Fecha de nacimiento: ${new Date(record.patientBirthDate).toLocaleDateString('es-ES')}`, 25, 160);
       doc.text(`Fecha del informe: ${record.createdAt.toLocaleDateString('es-ES')}`, 25, 170);
 
+      let currentY = 200;
+
+      // Pruebas solicitadas (si existen)
+      if (record.requestedTests) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.text('PRUEBAS SOLICITADAS', 20, currentY);
+        currentY += 15;
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(12);
+        
+        const testsLines = doc.splitTextToSize(record.requestedTests, 170);
+        testsLines.forEach((line: string) => {
+          doc.text(line, 20, currentY);
+          currentY += 5;
+        });
+        
+        currentY += 10;
+      }
+
+      // Documentos adjuntos (si existen)
+      if (record.uploadedDocuments && record.uploadedDocuments.length > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.text('DOCUMENTOS ADJUNTOS', 20, currentY);
+        currentY += 15;
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(12);
+        
+        record.uploadedDocuments.forEach((url: string, index: number) => {
+          const fileName = url.split('/').pop() || `Documento ${index + 1}`;
+          doc.text(`• ${fileName}`, 20, currentY);
+          currentY += 5;
+        });
+        
+        currentY += 10;
+      }
+
+      // Estado de facturación (si existe)
+      if (record.invoiceIssued !== undefined || record.paid !== undefined) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.text('ESTADO DE FACTURACIÓN', 20, currentY);
+        currentY += 15;
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(12);
+        
+        if (record.invoiceIssued !== undefined) {
+          doc.text(`• Factura emitida: ${record.invoiceIssued ? 'Sí' : 'No'}`, 20, currentY);
+          currentY += 5;
+        }
+        
+        if (record.paid !== undefined) {
+          doc.text(`• Pagado: ${record.paid ? 'Sí' : 'No'}`, 20, currentY);
+          currentY += 5;
+        }
+        
+        currentY += 10;
+      }
+
       // Informe clínico con formato profesional
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(14);
-      doc.text('INFORME CLÍNICO', 20, 200);
+      doc.text('INFORME CLÍNICO', 20, currentY);
+      currentY += 15;
 
       doc.setFont('times', 'normal');
       doc.setFontSize(11);
@@ -114,7 +178,7 @@ export const pdfService = {
       // Añadir el informe clínico con paginación automática
       const reportLines = doc.splitTextToSize(record.report, 170);
       
-      // Función para añadir texto con paginación automática y formato Times New Roman
+      // Función para añadir texto con paginación automática
       const addTextWithPagination = (text: string[], startY: number) => {
         let currentY = startY;
         const lineHeight = 5; // Espaciado sencillo (reducido de 8 a 5)
@@ -136,8 +200,8 @@ export const pdfService = {
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(12);
             doc.text('INFORME CLÍNICO - Continuación', 20, 15);
-            doc.setFont('times', 'normal');
-            doc.setFontSize(11);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(12);
             currentY = 25; // Espacio después del encabezado
           }
           
@@ -165,7 +229,7 @@ export const pdfService = {
       };
       
       // Añadir el informe con paginación
-      addTextWithPagination(reportLines, 215);
+      addTextWithPagination(reportLines, currentY);
       
       // Pie de página en la última página
       doc.setFont('helvetica', 'italic');

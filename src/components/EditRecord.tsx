@@ -3,10 +3,10 @@ import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { useParams, useNavigate } from 'react-router-dom';
-import { medicalRecordService, patientService } from '../services/firebase';
+import { medicalRecordService, patientService, storageService } from '../services/firebase';
 import { pdfService } from '../services/pdfService';
 import { MedicalRecord, Patient } from '../types';
-import { FileText, Download, AlertCircle, CheckCircle, User, Shield, ArrowLeft, Save } from 'lucide-react';
+import { FileText, Download, AlertCircle, CheckCircle, User, Shield, ArrowLeft, Save, Upload, X, File, TestTube, ExternalLink, Receipt, CreditCard } from 'lucide-react';
 
 const schema = yup.object({
   name: yup.string().required('El nombre es obligatorio'),
@@ -14,7 +14,10 @@ const schema = yup.object({
   dni: yup.string().required('El DNI es obligatorio').matches(/^\d{8}[A-Z]$/, 'DNI debe tener 8 dígitos y una letra'),
   birthDate: yup.string().required('La fecha de nacimiento es obligatoria'),
   reportType: yup.string().oneOf(['Geneped', 'Medicaes'], 'Debe seleccionar un tipo de informe').required('El tipo de informe es obligatorio'),
-  report: yup.string().required('El informe clínico es obligatorio').min(10, 'El informe clínico debe tener al menos 10 caracteres')
+  report: yup.string().required('El informe clínico es obligatorio').min(10, 'El informe clínico debe tener al menos 10 caracteres'),
+  requestedTests: yup.string().optional(),
+  invoiceIssued: yup.boolean().optional(),
+  paid: yup.boolean().optional()
 }).required();
 
 type FormData = yup.InferType<typeof schema>;
@@ -28,6 +31,8 @@ const EditRecord: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const [record, setRecord] = useState<MedicalRecord | null>(null);
   const [patient, setPatient] = useState<Patient | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
 
   const {
     register,
@@ -37,6 +42,34 @@ const EditRecord: React.FC = () => {
   } = useForm<FormData>({
     resolver: yupResolver(schema)
   });
+
+  // Función para manejar la carga de archivos
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    setUploadedFiles(prev => [...prev, ...files]);
+  };
+
+  // Función para eliminar un archivo
+  const removeFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Función para subir archivos a Firebase Storage
+  const uploadFilesToStorage = async (files: File[]): Promise<string[]> => {
+    if (files.length === 0) return [];
+    
+    setUploadingFiles(true);
+    try {
+      const tempPatientId = `temp_${Date.now()}`;
+      const urls = await storageService.uploadDocuments(files, tempPatientId);
+      return urls;
+    } catch (error) {
+      console.error('Error subiendo archivos:', error);
+      throw new Error('Error al subir los documentos');
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
 
   const loadRecord = useCallback(async () => {
     try {
@@ -60,7 +93,10 @@ const EditRecord: React.FC = () => {
         dni: recordData.patientDni,
         birthDate: recordData.patientBirthDate,
         reportType: recordData.reportType,
-        report: recordData.report
+        report: recordData.report,
+        requestedTests: recordData.requestedTests || '',
+        invoiceIssued: recordData.invoiceIssued,
+        paid: recordData.paid
       });
     } catch (error) {
       console.error('Error cargando registro:', error);
@@ -84,6 +120,18 @@ const EditRecord: React.FC = () => {
     setSuccess(false);
 
     try {
+      // Subir archivos si existen
+      let documentUrls: string[] = [];
+      if (uploadedFiles.length > 0) {
+        documentUrls = await uploadFilesToStorage(uploadedFiles);
+      }
+
+      // Combinar documentos existentes con nuevos
+      const allDocuments = [
+        ...(record.uploadedDocuments || []),
+        ...documentUrls
+      ];
+
       // Actualizar datos del paciente
       await patientService.update(patient.id!, {
         name: data.name,
@@ -99,7 +147,11 @@ const EditRecord: React.FC = () => {
         patientDni: data.dni,
         patientBirthDate: data.birthDate,
         reportType: data.reportType,
-        report: data.report
+        report: data.report,
+        requestedTests: data.requestedTests || undefined,
+        uploadedDocuments: allDocuments.length > 0 ? allDocuments : undefined,
+        invoiceIssued: data.invoiceIssued,
+        paid: data.paid
       });
 
       setSuccess(true);
@@ -291,6 +343,183 @@ const EditRecord: React.FC = () => {
             </div>
           </div>
 
+          {/* Documentos existentes */}
+          {record?.uploadedDocuments && record.uploadedDocuments.length > 0 && (
+            <div className="mb-8">
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-br from-pastel-blue to-pastel-blue-light rounded-lg flex items-center justify-center">
+                  <File className="h-5 w-5 text-primary-700" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-primary-700">Documentos Adjuntos</h2>
+                  <p className="text-pastel-gray-dark text-sm">Documentos ya subidos para este paciente</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {record.uploadedDocuments.map((url, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-pastel-gray-light rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <File className="h-4 w-4 text-primary-500" />
+                      <div>
+                        <p className="text-sm font-medium text-primary-700">
+                          Documento {index + 1}
+                        </p>
+                        <p className="text-xs text-primary-500">
+                          {url.split('/').pop()}
+                        </p>
+                      </div>
+                    </div>
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1 text-primary-500 hover:text-primary-700 transition-colors duration-200"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Carga de nuevos documentos */}
+          <div className="mb-8">
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="w-10 h-10 bg-gradient-to-br from-pastel-blue to-pastel-blue-light rounded-lg flex items-center justify-center">
+                <Upload className="h-5 w-5 text-primary-700" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-primary-700">Añadir Documentos</h2>
+                <p className="text-pastel-gray-dark text-sm">Sube nuevos documentos para este paciente</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* Área de carga */}
+              <div className="border-2 border-dashed border-pastel-gray-light rounded-xl p-6 text-center hover:border-primary-300 transition-all duration-200">
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id="file-upload-edit"
+                />
+                <label htmlFor="file-upload-edit" className="cursor-pointer">
+                  <Upload className="h-8 w-8 text-primary-400 mx-auto mb-2" />
+                  <p className="text-sm text-primary-600 mb-1">
+                    <span className="font-medium text-primary-700">Haz clic para subir</span> o arrastra los archivos aquí
+                  </p>
+                  <p className="text-xs text-primary-500">
+                    PDF, DOC, DOCX, JPG, PNG (máx. 10MB por archivo)
+                  </p>
+                </label>
+              </div>
+
+              {/* Lista de archivos subidos */}
+              {uploadedFiles.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-primary-700">Archivos a subir:</h4>
+                  {uploadedFiles.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border border-pastel-gray-light">
+                      <div className="flex items-center space-x-3">
+                        <File className="h-4 w-4 text-primary-500" />
+                        <div>
+                          <p className="text-sm font-medium text-primary-700">{file.name}</p>
+                          <p className="text-xs text-primary-500">
+                            {(file.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(index)}
+                        className="p-1 text-red-500 hover:text-red-700 transition-colors duration-200"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {uploadingFiles && (
+                <div className="flex items-center space-x-2 text-primary-600">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+                  <span className="text-sm">Subiendo documentos...</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Pruebas solicitadas */}
+          <div className="mb-8">
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="w-10 h-10 bg-gradient-to-br from-pastel-blue to-pastel-blue-light rounded-lg flex items-center justify-center">
+                <TestTube className="h-5 w-5 text-primary-700" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-primary-700">Pruebas Solicitadas</h2>
+                <p className="text-pastel-gray-dark text-sm">Especifica las pruebas solicitadas para el paciente</p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-primary-700 mb-2">
+                Pruebas solicitadas
+              </label>
+              <textarea
+                {...register('requestedTests')}
+                rows={3}
+                className="w-full px-4 py-3 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 resize-none"
+                placeholder="Especifica las pruebas solicitadas para el paciente..."
+              />
+            </div>
+          </div>
+
+          {/* Estado de facturación y pago */}
+          <div className="mb-8">
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="w-10 h-10 bg-gradient-to-br from-pastel-blue to-pastel-blue-light rounded-lg flex items-center justify-center">
+                <Receipt className="h-5 w-5 text-primary-700" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-primary-700">Estado de Facturación</h2>
+                <p className="text-pastel-gray-dark text-sm">Gestiona el estado de facturación y pago</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="flex items-center space-x-4 p-4 border border-pastel-gray-light rounded-xl">
+                <input
+                  {...register('invoiceIssued')}
+                  type="checkbox"
+                  id="invoiceIssued"
+                  className="w-4 h-4 text-primary-600 border-pastel-gray-light focus:ring-primary-500"
+                />
+                <label htmlFor="invoiceIssued" className="flex items-center space-x-3 cursor-pointer">
+                  <Receipt className="h-5 w-5 text-primary-600" />
+                  <span className="text-sm font-medium text-primary-700">Factura emitida</span>
+                </label>
+              </div>
+
+              <div className="flex items-center space-x-4 p-4 border border-pastel-gray-light rounded-xl">
+                <input
+                  {...register('paid')}
+                  type="checkbox"
+                  id="paid"
+                  className="w-4 h-4 text-primary-600 border-pastel-gray-light focus:ring-primary-500"
+                />
+                <label htmlFor="paid" className="flex items-center space-x-3 cursor-pointer">
+                  <CreditCard className="h-5 w-5 text-primary-600" />
+                  <span className="text-sm font-medium text-primary-700">Pagado</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
           {/* Tipo de Informe */}
           <div className="mb-8">
             <div className="flex items-center space-x-3 mb-6">
@@ -377,7 +606,7 @@ const EditRecord: React.FC = () => {
             
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || uploadingFiles}
               className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-xl text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 shadow-gentle hover:shadow-soft disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Save className="h-4 w-4 mr-2" />
