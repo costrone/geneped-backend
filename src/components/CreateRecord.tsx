@@ -30,6 +30,8 @@ const CreateRecord: React.FC = () => {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [uploadedPDF, setUploadedPDF] = useState<File | null>(null);
   const [protectingPDF, setProtectingPDF] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [isPDFDragOver, setIsPDFDragOver] = useState(false);
   const navigate = useNavigate();
 
   const {
@@ -67,6 +69,58 @@ const CreateRecord: React.FC = () => {
   // Función para eliminar PDF subido
   const removeUploadedPDF = () => {
     setUploadedPDF(null);
+  };
+
+  // Funciones para drag and drop de archivos
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    const validFiles = files.filter(file => {
+      const validTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
+      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+      return validTypes.includes(fileExtension);
+    });
+    
+    if (validFiles.length > 0) {
+      setUploadedFiles(prev => [...prev, ...validFiles]);
+    }
+  };
+
+  // Funciones para drag and drop de PDF
+  const handlePDFDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsPDFDragOver(true);
+  };
+
+  const handlePDFDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsPDFDragOver(false);
+  };
+
+  const handlePDFDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsPDFDragOver(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    const pdfFile = files.find(file => file.type === 'application/pdf');
+    
+    if (pdfFile) {
+      setUploadedPDF(pdfFile);
+    } else if (files.length > 0) {
+      alert('❌ Por favor, arrastra solo archivos PDF válidos.');
+    }
   };
 
   // Función para proteger PDF subido
@@ -319,7 +373,16 @@ const CreateRecord: React.FC = () => {
 
             <div className="space-y-4">
               {/* Área de carga */}
-              <div className="border-2 border-dashed border-pastel-gray-light rounded-xl p-6 text-center hover:border-primary-300 transition-all duration-200">
+              <div 
+                className={`border-2 border-dashed rounded-xl p-6 text-center transition-all duration-200 ${
+                  isDragOver 
+                    ? 'border-primary-500 bg-primary-50' 
+                    : 'border-pastel-gray-light hover:border-primary-300'
+                }`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
                 <input
                   type="file"
                   multiple
@@ -329,13 +392,20 @@ const CreateRecord: React.FC = () => {
                   id="file-upload"
                 />
                 <label htmlFor="file-upload" className="cursor-pointer">
-                  <Upload className="h-8 w-8 text-primary-400 mx-auto mb-2" />
+                  <Upload className={`h-8 w-8 mx-auto mb-2 ${
+                    isDragOver ? 'text-primary-600' : 'text-primary-400'
+                  }`} />
                   <p className="text-sm text-primary-600 mb-1">
                     <span className="font-medium text-primary-700">Haz clic para subir</span> o arrastra los archivos aquí
                   </p>
                   <p className="text-xs text-primary-500">
                     PDF, DOC, DOCX, JPG, PNG (máx. 10MB por archivo)
                   </p>
+                  {isDragOver && (
+                    <p className="text-sm text-primary-600 font-medium mt-2">
+                      Suelta los archivos aquí
+                    </p>
+                  )}
                 </label>
               </div>
 
@@ -388,7 +458,16 @@ const CreateRecord: React.FC = () => {
               </p>
 
               {/* Área de carga de PDF */}
-              <div className="border-2 border-dashed border-pastel-gray-light rounded-xl p-6 text-center hover:border-primary-300 transition-all duration-200">
+              <div 
+                className={`border-2 border-dashed rounded-xl p-6 text-center transition-all duration-200 ${
+                  isPDFDragOver 
+                    ? 'border-primary-500 bg-primary-50' 
+                    : 'border-pastel-gray-light hover:border-primary-300'
+                }`}
+                onDragOver={handlePDFDragOver}
+                onDragLeave={handlePDFDragLeave}
+                onDrop={handlePDFDrop}
+              >
                 <input
                   type="file"
                   accept=".pdf"
@@ -397,13 +476,20 @@ const CreateRecord: React.FC = () => {
                   id="pdf-upload"
                 />
                 <label htmlFor="pdf-upload" className="cursor-pointer">
-                  <FileText className="h-8 w-8 text-primary-400 mx-auto mb-2" />
+                  <FileText className={`h-8 w-8 mx-auto mb-2 ${
+                    isPDFDragOver ? 'text-primary-600' : 'text-primary-400'
+                  }`} />
                   <p className="text-sm text-primary-600 mb-1">
                     <span className="font-medium text-primary-700">Haz clic para subir PDF</span> o arrastra el archivo aquí
                   </p>
                   <p className="text-xs text-primary-500">
                     Solo archivos PDF (máx. 10MB)
                   </p>
+                  {isPDFDragOver && (
+                    <p className="text-sm text-primary-600 font-medium mt-2">
+                      Suelta el PDF aquí
+                    </p>
+                  )}
                 </label>
               </div>
 

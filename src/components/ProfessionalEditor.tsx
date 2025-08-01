@@ -1,5 +1,32 @@
-import React, { useState, useRef } from 'react';
-import { Eye, EyeOff, Download, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, AlignJustify, List, ListOrdered, RotateCcw } from 'lucide-react';
+import React, { useState } from 'react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import TextAlign from '@tiptap/extension-text-align';
+import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
+import Image from '@tiptap/extension-image';
+import Link from '@tiptap/extension-link';
+import Underline from '@tiptap/extension-underline';
+import { TextStyle, Color } from '@tiptap/extension-text-style';
+import Highlight from '@tiptap/extension-highlight';
+import { 
+  Bold, 
+  Italic, 
+  Underline as UnderlineIcon, 
+  AlignLeft, 
+  AlignCenter, 
+  AlignRight, 
+  AlignJustify,
+  List,
+  ListOrdered,
+  Table as TableIcon,
+  Image as ImageIcon,
+  Link as LinkIcon,
+  Eye,
+  EyeOff,
+  Download,
+  Palette,
+  Highlighter
+} from 'lucide-react';
 import './ProfessionalEditor.css';
 
 interface ProfessionalEditorProps {
@@ -12,255 +39,342 @@ interface ProfessionalEditorProps {
 const ProfessionalEditor: React.FC<ProfessionalEditorProps> = ({
   value,
   onChange,
-  placeholder = "Escribe el informe clínico aquí...",
-  className = ""
+  placeholder = 'Escribe el informe clínico aquí...',
+  className = ''
 }) => {
   const [showPreview, setShowPreview] = useState(false);
-  const [previewContent, setPreviewContent] = useState('');
-  const editorRef = useRef<HTMLDivElement>(null);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showHighlightPicker, setShowHighlightPicker] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [imageUrl, setImageUrl] = useState('');
+  const [showImageInput, setShowImageInput] = useState(false);
 
-  const handleEditorChange = (content: string) => {
-    onChange(content);
-    setPreviewContent(content);
-  };
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: false,
+        codeBlock: false,
+        blockquote: false,
+        horizontalRule: false,
+      }),
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+        alignments: ['left', 'center', 'right', 'justify'],
+      }),
+      Table,
+      TableRow,
+      TableHeader,
+      TableCell,
+      Image.configure({
+        allowBase64: true,
+        inline: true,
+      }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: 'text-blue-600 underline',
+        },
+      }),
+      Underline,
+      TextStyle,
+      Color,
+      Highlight.configure({
+        multicolor: true,
+      }),
+    ],
+    content: value,
+    onUpdate: ({ editor }) => {
+      onChange(editor.getHTML());
+    },
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none',
+        style: 'font-family: "Times New Roman", serif; font-size: 11pt; line-height: 1.5; text-align: justify;',
+      },
+    },
+  });
 
-  const handlePreviewToggle = () => {
-    if (!showPreview) {
-      const content = editorRef.current?.innerHTML || value;
-      setPreviewContent(content);
-    }
-    setShowPreview(!showPreview);
-  };
-
-  const downloadPreview = () => {
-    const content = previewContent;
-    const blob = new Blob([`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Vista Previa - Informe Clínico</title>
-          <style>
-            body {
-              font-family: 'Times New Roman', serif;
-              font-size: 11pt;
-              line-height: 1.5;
-              margin: 2cm;
-              color: #333;
-            }
-            h1, h2, h3 { color: #2c3e50; }
-            p { margin-bottom: 0.5em; text-align: justify; }
-            .highlight { background-color: #fff3cd; }
-            table { border-collapse: collapse; width: 100%; margin: 1em 0; }
-            table, th, td { border: 1px solid #ddd; }
-            th, td { padding: 8px; text-align: left; }
-            ul, ol { margin: 0.5em 0; padding-left: 2em; }
-            blockquote { 
-              border-left: 4px solid #3498db; 
-              margin: 1em 0; 
-              padding-left: 1em; 
-              font-style: italic; 
-            }
-          </style>
-        </head>
-        <body>
-          ${content}
-        </body>
-      </html>
-    `], { type: 'text/html' });
-    
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'vista-previa-informe.html';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const applyFormat = (command: string, value?: string) => {
-    document.execCommand(command, false, value);
-    if (editorRef.current) {
-      handleEditorChange(editorRef.current.innerHTML);
+  const addLink = () => {
+    if (linkUrl) {
+      editor?.chain().focus().extendMarkRange('link').setLink({ href: linkUrl }).run();
+      setLinkUrl('');
+      setShowLinkInput(false);
     }
   };
 
-  const insertList = (type: 'ul' | 'ol') => {
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const list = document.createElement(type);
-      const listItem = document.createElement('li');
-      listItem.textContent = '';
-      list.appendChild(listItem);
-      range.insertNode(list);
-      
-      // Mover el cursor dentro del primer elemento de la lista
-      const newRange = document.createRange();
-      newRange.setStart(listItem, 0);
-      newRange.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-      
-      if (editorRef.current) {
-        handleEditorChange(editorRef.current.innerHTML);
-      }
+  const addImage = () => {
+    if (imageUrl) {
+      editor?.chain().focus().setImage({ src: imageUrl }).run();
+      setImageUrl('');
+      setShowImageInput(false);
     }
   };
+
+  const addTable = () => {
+    editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+  };
+
+  const setTextColor = (color: string) => {
+    editor?.chain().focus().setColor(color).run();
+    setShowColorPicker(false);
+  };
+
+  const setHighlightColor = (color: string) => {
+    editor?.chain().focus().toggleHighlight({ color }).run();
+    setShowHighlightPicker(false);
+  };
+
+  const downloadHTML = () => {
+    if (editor) {
+      const html = editor.getHTML();
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'informe-clinico.html';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  if (!editor) {
+    return null;
+  }
 
   return (
     <div className={`professional-editor ${className}`}>
-      <div className="editor-container">
-        {!showPreview ? (
-          <div className="native-editor-wrapper">
-            <div className="editor-toolbar">
-              <div className="toolbar-group">
-                <button
-                  type="button"
-                  onClick={() => applyFormat('bold')}
-                  className="toolbar-button"
-                  title="Negrita (Ctrl+B)"
-                >
-                  <Bold className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyFormat('italic')}
-                  className="toolbar-button"
-                  title="Cursiva (Ctrl+I)"
-                >
-                  <Italic className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyFormat('underline')}
-                  className="toolbar-button"
-                  title="Subrayado (Ctrl+U)"
-                >
-                  <Underline className="h-4 w-4" />
-                </button>
+      {/* Toolbar */}
+      <div className="editor-toolbar">
+        <div className="toolbar-section">
+          {/* Text Formatting */}
+          <button
+            onClick={() => editor.chain().focus().toggleBold().run()}
+            className={`toolbar-button ${editor.isActive('bold') ? 'active' : ''}`}
+            title="Negrita"
+          >
+            <Bold size={16} />
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+            className={`toolbar-button ${editor.isActive('italic') ? 'active' : ''}`}
+            title="Cursiva"
+          >
+            <Italic size={16} />
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleUnderline().run()}
+            className={`toolbar-button ${editor.isActive('underline') ? 'active' : ''}`}
+            title="Subrayado"
+          >
+            <UnderlineIcon size={16} />
+          </button>
+        </div>
+
+        <div className="toolbar-section">
+          {/* Text Alignment */}
+          <button
+            onClick={() => editor.chain().focus().setTextAlign('left').run()}
+            className={`toolbar-button ${editor.isActive({ textAlign: 'left' }) ? 'active' : ''}`}
+            title="Alinear izquierda"
+          >
+            <AlignLeft size={16} />
+          </button>
+          <button
+            onClick={() => editor.chain().focus().setTextAlign('center').run()}
+            className={`toolbar-button ${editor.isActive({ textAlign: 'center' }) ? 'active' : ''}`}
+            title="Centrar"
+          >
+            <AlignCenter size={16} />
+          </button>
+          <button
+            onClick={() => editor.chain().focus().setTextAlign('right').run()}
+            className={`toolbar-button ${editor.isActive({ textAlign: 'right' }) ? 'active' : ''}`}
+            title="Alinear derecha"
+          >
+            <AlignRight size={16} />
+          </button>
+          <button
+            onClick={() => editor.chain().focus().setTextAlign('justify').run()}
+            className={`toolbar-button ${editor.isActive({ textAlign: 'justify' }) ? 'active' : ''}`}
+            title="Justificar"
+          >
+            <AlignJustify size={16} />
+          </button>
+        </div>
+
+        <div className="toolbar-section">
+          {/* Lists */}
+          <button
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            className={`toolbar-button ${editor.isActive('bulletList') ? 'active' : ''}`}
+            title="Lista con viñetas"
+          >
+            <List size={16} />
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            className={`toolbar-button ${editor.isActive('orderedList') ? 'active' : ''}`}
+            title="Lista numerada"
+          >
+            <ListOrdered size={16} />
+          </button>
+        </div>
+
+        <div className="toolbar-section">
+          {/* Advanced Features */}
+          <button
+            onClick={addTable}
+            className="toolbar-button"
+            title="Insertar tabla"
+          >
+            <TableIcon size={16} />
+          </button>
+          <button
+            onClick={() => setShowImageInput(true)}
+            className="toolbar-button"
+            title="Insertar imagen"
+          >
+            <ImageIcon size={16} />
+          </button>
+          <button
+            onClick={() => setShowLinkInput(true)}
+            className={`toolbar-button ${editor.isActive('link') ? 'active' : ''}`}
+            title="Insertar enlace"
+          >
+            <LinkIcon size={16} />
+          </button>
+        </div>
+
+        <div className="toolbar-section">
+          {/* Colors */}
+          <div className="color-picker-container">
+            <button
+              onClick={() => setShowColorPicker(!showColorPicker)}
+              className="toolbar-button"
+              title="Color de texto"
+            >
+              <Palette size={16} />
+            </button>
+            {showColorPicker && (
+              <div className="color-picker">
+                {['#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', '#FFA500', '#800080', '#008000'].map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => setTextColor(color)}
+                    className="color-option"
+                    style={{ backgroundColor: color }}
+                    title={color}
+                  />
+                ))}
               </div>
-              
-              <div className="toolbar-group">
-                <button
-                  type="button"
-                  onClick={() => applyFormat('justifyLeft')}
-                  className="toolbar-button"
-                  title="Alinear a la izquierda"
-                >
-                  <AlignLeft className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyFormat('justifyCenter')}
-                  className="toolbar-button"
-                  title="Centrar"
-                >
-                  <AlignCenter className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyFormat('justifyRight')}
-                  className="toolbar-button"
-                  title="Alinear a la derecha"
-                >
-                  <AlignRight className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyFormat('justifyFull')}
-                  className="toolbar-button"
-                  title="Justificar"
-                >
-                  <AlignJustify className="h-4 w-4" />
-                </button>
-              </div>
-              
-              <div className="toolbar-group">
-                <button
-                  type="button"
-                  onClick={() => insertList('ul')}
-                  className="toolbar-button"
-                  title="Lista con viñetas"
-                >
-                  <List className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertList('ol')}
-                  className="toolbar-button"
-                  title="Lista numerada"
-                >
-                  <ListOrdered className="h-4 w-4" />
-                </button>
-              </div>
-              
-              <div className="toolbar-group">
-                <button
-                  type="button"
-                  onClick={() => applyFormat('removeFormat')}
-                  className="toolbar-button"
-                  title="Limpiar formato"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                </button>
-              </div>
-              
-              <div className="toolbar-group">
-                <button
-                  type="button"
-                  onClick={handlePreviewToggle}
-                  className="preview-button"
-                  title="Mostrar vista previa"
-                >
-                  <Eye className="h-4 w-4" />
-                  Vista Previa
-                </button>
-              </div>
-            </div>
-            
-            <div
-              ref={editorRef}
-              className="editor-content"
-              contentEditable={true}
-              dangerouslySetInnerHTML={{ __html: value }}
-              onInput={(e) => handleEditorChange(e.currentTarget.innerHTML)}
-              onBlur={(e) => handleEditorChange(e.currentTarget.innerHTML)}
-              data-placeholder={placeholder}
-            />
+            )}
           </div>
-        ) : (
-          <div className="preview-container">
-            <div className="preview-header">
-              <h3 className="preview-title">Vista Previa - Como aparecerá en el PDF</h3>
-              <p className="preview-subtitle">Times New Roman 11pt, espaciado simple, justificado</p>
-              <button
-                type="button"
-                onClick={handlePreviewToggle}
-                className="preview-button"
-                title="Volver al editor"
-              >
-                <EyeOff className="h-4 w-4" />
-                Volver al Editor
-              </button>
-              <button
-                type="button"
-                onClick={downloadPreview}
-                className="download-button"
-                title="Descargar vista previa"
-              >
-                <Download className="h-4 w-4" />
-                Descargar HTML
-              </button>
-            </div>
-            <div 
-              className="preview-content"
-              dangerouslySetInnerHTML={{ __html: previewContent }}
-            />
+
+          <div className="color-picker-container">
+            <button
+              onClick={() => setShowHighlightPicker(!showHighlightPicker)}
+              className="toolbar-button"
+              title="Resaltar texto"
+            >
+              <Highlighter size={16} />
+            </button>
+            {showHighlightPicker && (
+              <div className="color-picker">
+                {['#FFEB3B', '#FF9800', '#F44336', '#E91E63', '#9C27B0', '#673AB7', '#3F51B5', '#2196F3', '#03A9F4', '#00BCD4'].map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => setHighlightColor(color)}
+                    className="color-option"
+                    style={{ backgroundColor: color }}
+                    title={color}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
+
+        <div className="toolbar-section">
+          {/* Preview and Download */}
+          <button
+            onClick={() => setShowPreview(!showPreview)}
+            className="toolbar-button"
+            title={showPreview ? 'Ocultar vista previa' : 'Mostrar vista previa'}
+          >
+            {showPreview ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+          <button
+            onClick={downloadHTML}
+            className="toolbar-button"
+            title="Descargar HTML"
+          >
+            <Download size={16} />
+          </button>
+        </div>
       </div>
+
+      {/* Link Input Modal */}
+      {showLinkInput && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>Insertar enlace</h3>
+            <input
+              type="url"
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              placeholder="https://ejemplo.com"
+              className="modal-input"
+            />
+            <div className="modal-buttons">
+              <button onClick={addLink} className="btn-primary">Insertar</button>
+              <button onClick={() => setShowLinkInput(false)} className="btn-secondary">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Input Modal */}
+      {showImageInput && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>Insertar imagen</h3>
+            <input
+              type="url"
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              placeholder="https://ejemplo.com/imagen.jpg"
+              className="modal-input"
+            />
+            <div className="modal-buttons">
+              <button onClick={addImage} className="btn-primary">Insertar</button>
+              <button onClick={() => setShowImageInput(false)} className="btn-secondary">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Editor Content */}
+      <div className="editor-content">
+        <EditorContent 
+          editor={editor} 
+          className="tiptap-editor"
+          data-placeholder={placeholder}
+        />
+      </div>
+
+      {/* Preview */}
+      {showPreview && (
+        <div className="preview-container">
+          <h3>Vista previa del PDF</h3>
+          <div 
+            className="preview-content"
+            dangerouslySetInnerHTML={{ __html: editor.getHTML() }}
+          />
+        </div>
+      )}
     </div>
   );
 };

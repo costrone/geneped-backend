@@ -33,6 +33,7 @@ const EditRecord: React.FC = () => {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [record, setRecord] = useState<MedicalRecord | null>(null);
   const [patient, setPatient] = useState<Patient | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const {
     register,
@@ -54,6 +55,33 @@ const EditRecord: React.FC = () => {
   // Función para eliminar archivos
   const removeFile = (index: number) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Funciones para drag and drop de archivos
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    const validFiles = files.filter(file => {
+      const validTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
+      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+      return validTypes.includes(fileExtension);
+    });
+    
+    if (validFiles.length > 0) {
+      setUploadedFiles(prev => [...prev, ...validFiles]);
+    }
   };
 
   const loadRecord = useCallback(async () => {
@@ -393,7 +421,16 @@ const EditRecord: React.FC = () => {
 
             <div className="space-y-4">
               {/* Área de carga */}
-              <div className="border-2 border-dashed border-pastel-gray-light rounded-xl p-6 text-center hover:border-primary-300 transition-all duration-200">
+              <div 
+                className={`border-2 border-dashed rounded-xl p-6 text-center transition-all duration-200 ${
+                  isDragOver 
+                    ? 'border-primary-500 bg-primary-50' 
+                    : 'border-pastel-gray-light hover:border-primary-300'
+                }`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
                 <input
                   type="file"
                   multiple
@@ -403,13 +440,20 @@ const EditRecord: React.FC = () => {
                   id="file-upload-edit"
                 />
                 <label htmlFor="file-upload-edit" className="cursor-pointer">
-                  <Upload className="h-8 w-8 text-primary-400 mx-auto mb-2" />
+                  <Upload className={`h-8 w-8 mx-auto mb-2 ${
+                    isDragOver ? 'text-primary-600' : 'text-primary-400'
+                  }`} />
                   <p className="text-sm text-primary-600 mb-1">
                     <span className="font-medium text-primary-700">Haz clic para subir</span> o arrastra los archivos aquí
                   </p>
                   <p className="text-xs text-primary-500">
                     PDF, DOC, DOCX, JPG, PNG (máx. 10MB por archivo)
                   </p>
+                  {isDragOver && (
+                    <p className="text-sm text-primary-600 font-medium mt-2">
+                      Suelta los archivos aquí
+                    </p>
+                  )}
                 </label>
               </div>
 
