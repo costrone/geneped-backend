@@ -15,5 +15,17 @@ service cloud.firestore {
     match /medicalRecords/{recordId} {
       allow read, write: if request.auth != null;
     }
+    
+    // Reglas específicas para facturas
+    match /invoices/{invoiceId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+    }
+    
+    // Reglas específicas para información de empresas
+    match /companyInfo/{companyId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+    }
   }
 } 

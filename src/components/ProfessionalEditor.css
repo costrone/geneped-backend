@@ -6,6 +6,15 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  color: #64748b;
+  font-style: italic;
+}
+
 /* Toolbar */
 .editor-toolbar {
   display: flex;
@@ -200,13 +209,18 @@
   line-height: 1.5;
   color: #1e293b;
   background: white;
+  border: none;
+  resize: none;
+  overflow-y: auto;
+  outline: none;
+  cursor: text;
 }
 
 .tiptap-editor:focus {
   outline: none;
+  border: none;
 }
 
-/* TipTap Content Styles */
 .tiptap-editor p {
   margin: 0 0 0.5em 0;
   text-align: justify;
@@ -219,6 +233,8 @@
   height: 0;
   pointer-events: none;
 }
+
+
 
 .tiptap-editor h1,
 .tiptap-editor h2,
@@ -431,9 +447,15 @@
 
 /* Responsive Design */
 @media (max-width: 768px) {
+  .professional-editor {
+    border-radius: 6px;
+  }
+
   .editor-toolbar {
     flex-direction: column;
     align-items: stretch;
+    gap: 6px;
+    padding: 8px;
   }
   
   .toolbar-section {
@@ -441,20 +463,122 @@
     border-right: none;
     border-bottom: 1px solid #cbd5e1;
     padding-right: 0;
-    padding-bottom: 8px;
+    padding-bottom: 6px;
+    gap: 3px;
   }
   
   .toolbar-section:last-child {
     border-bottom: none;
     padding-bottom: 0;
   }
+
+  .toolbar-button {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+
+  .tiptap-editor {
+    min-height: 250px;
+    padding: 12px;
+    font-size: 10pt;
+  }
+
+  .color-picker {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3px;
+    padding: 6px;
+  }
+
+  .color-option {
+    width: 20px;
+    height: 20px;
+  }
   
   .modal {
-    min-width: 300px;
-    margin: 20px;
+    min-width: 280px;
+    max-width: 90vw;
+    margin: 10px;
+    padding: 16px;
   }
   
   .modal-buttons {
     flex-direction: column;
+    gap: 8px;
+  }
+
+  .preview-container {
+    padding: 12px;
+  }
+
+  .preview-content {
+    padding: 12px;
+    max-height: 300px;
+  }
+}
+
+/* Mobile-specific optimizations */
+@media (max-width: 480px) {
+  .editor-toolbar {
+    padding: 6px;
+    gap: 4px;
+  }
+
+  .toolbar-section {
+    padding-bottom: 4px;
+    gap: 2px;
+  }
+
+  .toolbar-button {
+    width: 28px;
+    height: 28px;
+    font-size: 11px;
+  }
+
+  .tiptap-editor {
+    min-height: 200px;
+    padding: 8px;
+    font-size: 9pt;
+  }
+
+  .modal {
+    min-width: 260px;
+    padding: 12px;
+  }
+
+  .modal h3 {
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+
+  .modal-input {
+    padding: 8px;
+    font-size: 14px;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+}
+
+/* Landscape mobile optimization */
+@media (max-width: 768px) and (orientation: landscape) {
+  .editor-toolbar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .toolbar-section {
+    border-right: 1px solid #cbd5e1;
+    border-bottom: none;
+    padding-right: 8px;
+    padding-bottom: 0;
+  }
+
+  .tiptap-editor {
+    min-height: 180px;
   }
 } 

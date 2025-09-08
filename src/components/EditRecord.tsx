@@ -236,7 +236,7 @@ const EditRecord: React.FC = () => {
     <div className="max-w-4xl mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between mb-6 space-y-4 lg:space-y-0">
           <div className="flex items-center space-x-3">
             <button
               onClick={() => navigate('/history')}
@@ -249,7 +249,7 @@ const EditRecord: React.FC = () => {
               <FileText className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-primary-700">Editar Registro Médico</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-primary-700">Editar Registro Médico</h1>
               <p className="text-pastel-gray-dark text-sm">
                 Modifica los datos del paciente y el informe clínico
               </p>
@@ -258,7 +258,7 @@ const EditRecord: React.FC = () => {
           
           <button
             onClick={generateNewPDF}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-xl text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 shadow-gentle hover:shadow-soft"
+            className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-xl text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 shadow-gentle hover:shadow-soft"
           >
             <Download className="h-4 w-4 mr-2" />
             Regenerar PDF
@@ -291,7 +291,7 @@ const EditRecord: React.FC = () => {
 
       {/* Formulario */}
       <div className="bg-white rounded-2xl shadow-soft overflow-hidden">
-        <form onSubmit={handleSubmit(onSubmit)} className="p-8">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-4 sm:p-8">
           {/* Datos del Paciente */}
           <div className="mb-8">
             <div className="flex items-center space-x-3 mb-6">
@@ -304,7 +304,7 @@ const EditRecord: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               <div>
                 <label className="block text-sm font-medium text-primary-700 mb-2">
                   Nombre *
@@ -312,7 +312,7 @@ const EditRecord: React.FC = () => {
                 <input
                   {...register('name')}
                   type="text"
-                  className="w-full px-4 py-3 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  className="w-full px-3 sm:px-4 py-3 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
                   placeholder="Nombre del paciente"
                 />
                 {errors.name && (
@@ -327,7 +327,7 @@ const EditRecord: React.FC = () => {
                 <input
                   {...register('surname')}
                   type="text"
-                  className="w-full px-4 py-3 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  className="w-full px-3 sm:px-4 py-3 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
                   placeholder="Apellidos del paciente"
                 />
                 {errors.surname && (
@@ -342,7 +342,7 @@ const EditRecord: React.FC = () => {
                 <input
                   {...register('dni')}
                   type="text"
-                  className="w-full px-4 py-3 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  className="w-full px-3 sm:px-4 py-3 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
                   placeholder="12345678A"
                 />
                 {errors.dni && (
@@ -357,7 +357,7 @@ const EditRecord: React.FC = () => {
                 <input
                   {...register('birthDate')}
                   type="date"
-                  className="w-full px-4 py-3 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  className="w-full px-3 sm:px-4 py-3 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
                 />
                 {errors.birthDate && (
                   <p className="mt-1 text-sm text-red-600">{errors.birthDate.message}</p>
@@ -530,7 +530,7 @@ const EditRecord: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div className="flex items-center space-x-4 p-4 border border-pastel-gray-light rounded-xl hover:bg-pastel-gray-light transition-all duration-200">
                 <input
                   {...register('reportType')}
@@ -595,11 +595,11 @@ const EditRecord: React.FC = () => {
           </div>
 
           {/* Botones de acción */}
-          <div className="flex justify-between items-center pt-6 border-t border-pastel-gray-light">
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center space-y-3 sm:space-y-0 pt-6 border-t border-pastel-gray-light">
             <button
               type="button"
               onClick={() => navigate('/history')}
-              className="inline-flex items-center px-6 py-3 border border-primary-300 text-sm font-medium rounded-xl text-primary-700 bg-white hover:bg-pastel-gray-light focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200"
+              className="inline-flex items-center justify-center px-6 py-3 border border-primary-300 text-sm font-medium rounded-xl text-primary-700 bg-white hover:bg-pastel-gray-light focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Volver al historial
@@ -608,7 +608,7 @@ const EditRecord: React.FC = () => {
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-xl text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-sm font-medium rounded-xl text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving ? (
                 <>

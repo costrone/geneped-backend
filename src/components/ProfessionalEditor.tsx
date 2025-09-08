@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TextAlign from '@tiptap/extension-text-align';
@@ -21,6 +21,7 @@ import {
   Table as TableIcon,
   Image as ImageIcon,
   Link as LinkIcon,
+  Unlink,
   Eye,
   EyeOff,
   Download,
@@ -83,17 +84,25 @@ const ProfessionalEditor: React.FC<ProfessionalEditorProps> = ({
         multicolor: true,
       }),
     ],
-    content: value,
+    content: value || '',
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none',
-        style: 'font-family: "Times New Roman", serif; font-size: 11pt; line-height: 1.5; text-align: justify;',
+        class: 'tiptap-editor',
+        'data-placeholder': placeholder,
       },
     },
+    editable: true,
   });
+
+  // Actualizar el contenido del editor cuando cambie el valor
+  useEffect(() => {
+    if (editor && value !== editor.getHTML()) {
+      editor.commands.setContent(value || '');
+    }
+  }, [editor, value]);
 
   const addLink = () => {
     if (linkUrl) {
@@ -141,7 +150,7 @@ const ProfessionalEditor: React.FC<ProfessionalEditorProps> = ({
   };
 
   if (!editor) {
-    return null;
+    return <div className="loading">Cargando editor...</div>;
   }
 
   return (
@@ -246,6 +255,15 @@ const ProfessionalEditor: React.FC<ProfessionalEditorProps> = ({
           >
             <LinkIcon size={16} />
           </button>
+          {editor.isActive('link') && (
+            <button
+              onClick={() => editor.chain().focus().unsetLink().run()}
+              className="toolbar-button"
+              title="Quitar enlace"
+            >
+              <Unlink size={16} />
+            </button>
+          )}
         </div>
 
         <div className="toolbar-section">

@@ -5,10 +5,12 @@ import { MedicalRecord, SearchFilters } from '../types';
 import { Search, Filter, Download, Eye, Calendar, User, FileText, Clock, Trash2, Edit, Mail, Receipt, CreditCard, RefreshCw } from 'lucide-react';
 import { pdfService } from '../services/pdfService';
 import { useUser } from '../contexts/UserContext';
+import { AlertTriangle } from 'lucide-react';
+import InvoiceGenerator from './InvoiceGenerator';
 
 const RecordHistory: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useUser();
+  const { user, isAdmin } = useUser();
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<MedicalRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -16,6 +18,10 @@ const RecordHistory: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<SearchFilters>({});
   const [sendingEmail, setSendingEmail] = useState<string | null>(null);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
+  const [showInvoiceGenerator, setShowInvoiceGenerator] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
 
   const loadRecords = useCallback(async () => {
     try {
@@ -209,6 +215,20 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
     navigate(`/edit/${record.id}`);
   };
 
+  const openInvoiceGenerator = (record: MedicalRecord) => {
+    setSelectedRecord(record);
+    setShowInvoiceGenerator(true);
+  };
+
+  const closeInvoiceGenerator = () => {
+    setShowInvoiceGenerator(false);
+    setSelectedRecord(null);
+  };
+
+  const handleInvoiceCreated = () => {
+    loadRecords(); // Recargar la lista para mostrar el estado actualizado
+  };
+
   const toggleInvoiceStatus = async (record: MedicalRecord) => {
     if (!user?.uid) {
       alert('❌ No se pudo obtener la información del usuario.');
@@ -263,33 +283,25 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
     return new Date(date).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
   };
 
-  const testFirestoreConnection = async () => {
-    console.log('=== PRUEBA DE CONEXIÓN FIRESTORE ===');
+
+
+  const deleteAllRecords = async () => {
+    if (!isAdmin) {
+      alert('❌ Solo los administradores pueden realizar esta acción.');
+      return;
+    }
+
     try {
-      // Hacer una consulta directa sin filtros
-      const { collection, getDocs, query } = await import('firebase/firestore');
-      const { db } = await import('../services/firebase');
-      
-      const simpleQuery = query(collection(db, 'medicalRecords'));
-      const snapshot = await getDocs(simpleQuery);
-      
-      console.log('Total de documentos en medicalRecords:', snapshot.docs.length);
-      
-      snapshot.docs.forEach((doc, index) => {
-        const data = doc.data();
-        console.log(`Documento ${index + 1}:`, {
-          id: doc.id,
-          userId: data.userId,
-          patientName: data.patientName,
-          createdAt: data.createdAt?.toDate(),
-          deletedAt: data.deletedAt?.toDate()
-        });
-      });
-      
-      alert(`Encontrados ${snapshot.docs.length} documentos en total. Revisa la consola para más detalles.`);
+      setDeletingAll(true);
+      const result = await medicalRecordService.deleteAllRecords();
+      alert(`✅ ${result.message}`);
+      setShowDeleteAllModal(false);
+      loadRecords(); // Recargar la lista
     } catch (error) {
-      console.error('Error en prueba de Firestore:', error);
-      alert('Error al conectar con Firestore. Revisa la consola.');
+      console.error('Error eliminando todos los registros:', error);
+      alert(`❌ Error: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } finally {
+      setDeletingAll(false);
     }
   };
 
@@ -329,10 +341,10 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
               </div>
             </div>
             
-            <div className="flex items-center space-x-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className="inline-flex items-center px-4 py-2 border border-white/20 text-sm font-medium rounded-xl text-primary-700 bg-white/90 hover:bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 shadow-gentle hover:shadow-soft"
+                className="inline-flex items-center justify-center px-4 py-2 border border-white/20 text-sm font-medium rounded-xl text-primary-700 bg-white/90 hover:bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 shadow-gentle hover:shadow-soft"
               >
                 <Filter className="h-4 w-4 mr-2" />
                 Filtros
@@ -341,35 +353,39 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
               <button
                 onClick={loadRecords}
                 disabled={loading}
-                className="inline-flex items-center px-4 py-2 border border-white/20 text-sm font-medium rounded-xl text-primary-700 bg-white/90 hover:bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 shadow-gentle hover:shadow-soft disabled:opacity-50"
+                className="inline-flex items-center justify-center px-4 py-2 border border-white/20 text-sm font-medium rounded-xl text-primary-700 bg-white/90 hover:bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 shadow-gentle hover:shadow-soft disabled:opacity-50"
                 title="Recargar registros"
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Recargar
               </button>
-              
-              <button
-                onClick={testFirestoreConnection}
-                className="inline-flex items-center px-4 py-2 border border-white/20 text-sm font-medium rounded-xl text-red-600 bg-white/90 hover:bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 shadow-gentle hover:shadow-soft"
-                title="Probar conexión con Firestore"
-              >
-                🔍 Probar
-              </button>
+
+              {/* Botón de administración - Solo visible para administradores */}
+              {isAdmin && (
+                <button
+                  onClick={() => setShowDeleteAllModal(true)}
+                  className="inline-flex items-center justify-center px-4 py-2 border border-white/20 text-sm font-medium rounded-xl text-red-600 bg-white/90 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-gentle hover:shadow-soft"
+                  title="Eliminar todo el historial (Solo administradores)"
+                >
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Borrar Todo
+                </button>
+              )}
             </div>
           </div>
         </div>
 
         {/* Filtros */}
         {showFilters && (
-          <div className="px-8 py-6 border-b border-pastel-gray-light bg-pastel-gray-light">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="px-4 sm:px-8 py-4 sm:py-6 border-b border-pastel-gray-light bg-pastel-gray-light">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <div>
                 <label className="block text-sm font-medium text-primary-700 mb-2">Nombre</label>
                 <input
                   type="text"
                   value={filters.name || ''}
                   onChange={(e) => handleFilterChange('name', e.target.value || undefined)}
-                  className="w-full px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  className="w-full px-3 sm:px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
                   placeholder="Buscar por nombre..."
                 />
               </div>
@@ -380,7 +396,7 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
                   type="text"
                   value={filters.surname || ''}
                   onChange={(e) => handleFilterChange('surname', e.target.value || undefined)}
-                  className="w-full px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  className="w-full px-3 sm:px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
                   placeholder="Buscar por apellidos..."
                 />
               </div>
@@ -391,7 +407,7 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
                   type="text"
                   value={filters.dni || ''}
                   onChange={(e) => handleFilterChange('dni', e.target.value || undefined)}
-                  className="w-full px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  className="w-full px-3 sm:px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
                   placeholder="Buscar por DNI..."
                 />
               </div>
@@ -402,7 +418,7 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
                   type="text"
                   value={filters.keywords || ''}
                   onChange={(e) => handleFilterChange('keywords', e.target.value || undefined)}
-                  className="w-full px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  className="w-full px-3 sm:px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
                   placeholder="Buscar en el informe..."
                 />
               </div>
@@ -413,7 +429,7 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
                   type="date"
                   value={filters.dateFrom ? filters.dateFrom.toISOString().split('T')[0] : ''}
                   onChange={(e) => handleFilterChange('dateFrom', e.target.value ? new Date(e.target.value) : undefined)}
-                  className="w-full px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  className="w-full px-3 sm:px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
                 />
               </div>
 
@@ -423,7 +439,7 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
                   type="date"
                   value={filters.dateTo ? filters.dateTo.toISOString().split('T')[0] : ''}
                   onChange={(e) => handleFilterChange('dateTo', e.target.value ? new Date(e.target.value) : undefined)}
-                  className="w-full px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  className="w-full px-3 sm:px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
                 />
               </div>
 
@@ -435,7 +451,7 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
                 <select
                   value={filters.invoiceIssued === undefined ? '' : filters.invoiceIssued ? 'true' : 'false'}
                   onChange={(e) => handleFilterChange('invoiceIssued', e.target.value === '' ? undefined : e.target.value === 'true')}
-                  className="w-full px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  className="w-full px-3 sm:px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
                 >
                   <option value="">Todos</option>
                   <option value="true">Sí</option>
@@ -451,7 +467,7 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
                 <select
                   value={filters.paid === undefined ? '' : filters.paid ? 'true' : 'false'}
                   onChange={(e) => handleFilterChange('paid', e.target.value === '' ? undefined : e.target.value === 'true')}
-                  className="w-full px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  className="w-full px-3 sm:px-4 py-2 border border-pastel-gray-light rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
                 >
                   <option value="">Todos</option>
                   <option value="true">Sí</option>
@@ -559,10 +575,10 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
                       </p>
                     </div>
                     
-                    <div className="flex items-center space-x-2 ml-6">
+                    <div className="flex flex-wrap items-center gap-2 ml-4 sm:ml-6">
                       <button
                         onClick={() => viewRecord(record)}
-                        className="inline-flex items-center px-3 py-2 border border-primary-300 text-sm font-medium rounded-xl text-primary-700 bg-white hover:bg-pastel-gray-light focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200"
+                        className="inline-flex items-center justify-center px-3 py-2 border border-primary-300 text-sm font-medium rounded-xl text-primary-700 bg-white hover:bg-pastel-gray-light focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200"
                         title="Ver detalles"
                       >
                         <Eye className="h-4 w-4" />
@@ -570,7 +586,7 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
                       
                       <button
                         onClick={() => editRecord(record)}
-                        className="inline-flex items-center px-3 py-2 border border-yellow-300 text-sm font-medium rounded-xl text-yellow-700 bg-white hover:bg-yellow-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition-all duration-200"
+                        className="inline-flex items-center justify-center px-3 py-2 border border-yellow-300 text-sm font-medium rounded-xl text-yellow-700 bg-white hover:bg-yellow-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition-all duration-200"
                         title="Editar registro"
                       >
                         <Edit className="h-4 w-4" />
@@ -578,7 +594,7 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
                       
                       <button
                         onClick={() => downloadPDF(record)}
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-xl text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200"
+                        className="inline-flex items-center justify-center px-3 py-2 border border-transparent text-sm font-medium rounded-xl text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200"
                         title="Descargar PDF"
                       >
                         <Download className="h-4 w-4" />
@@ -587,7 +603,7 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
                       <button
                         onClick={() => sendProtectedEmail(record)}
                         disabled={sendingEmail === record.id}
-                        className="inline-flex items-center px-3 py-2 border border-green-300 text-sm font-medium rounded-xl text-green-700 bg-white hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="inline-flex items-center justify-center px-3 py-2 border border-green-300 text-sm font-medium rounded-xl text-green-700 bg-white hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Enviar por email con enlace de descarga"
                       >
                         {sendingEmail === record.id ? (
@@ -597,9 +613,23 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
                         )}
                       </button>
                       
+                      {/* Botón de facturación */}
+                      <button
+                        onClick={() => openInvoiceGenerator(record)}
+                        disabled={record.invoiceIssued}
+                        className={`inline-flex items-center justify-center px-3 py-2 border text-sm font-medium rounded-xl transition-all duration-200 ${
+                          record.invoiceIssued
+                            ? 'border-green-300 text-green-700 bg-green-50 cursor-not-allowed'
+                            : 'border-primary-300 text-primary-700 bg-white hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
+                        }`}
+                        title={record.invoiceIssued ? 'Factura ya emitida' : 'Generar factura profesional'}
+                      >
+                        <Receipt className="h-4 w-4" />
+                      </button>
+                      
                       <button
                         onClick={() => deleteRecord(record)}
-                        className="inline-flex items-center px-3 py-2 border border-red-300 text-sm font-medium rounded-xl text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200"
+                        className="inline-flex items-center justify-center px-3 py-2 border border-red-300 text-sm font-medium rounded-xl text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200"
                         title="Eliminar registro"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -612,6 +642,71 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
           )}
         </div>
       </div>
+
+      {/* Modal de confirmación para borrar todo */}
+      {showDeleteAllModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-md w-full mx-4 shadow-2xl">
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">⚠️ Confirmar Eliminación</h3>
+                <p className="text-sm text-gray-600">Acción irreversible</p>
+              </div>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-gray-700 mb-4">
+                ¿Estás seguro de que quieres eliminar <strong>TODOS</strong> los registros del historial?
+              </p>
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                <p className="text-sm text-red-700 font-medium">
+                  ⚠️ Esta acción es <strong>IRREVERSIBLE</strong> y eliminará permanentemente:
+                </p>
+                <ul className="text-sm text-red-600 mt-2 space-y-1">
+                  <li>• Todos los registros médicos</li>
+                  <li>• Todos los archivos subidos</li>
+                  <li>• Todo el historial de la aplicación</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+              <button
+                onClick={() => setShowDeleteAllModal(false)}
+                className="flex-1 px-4 py-3 border border-gray-300 text-sm font-medium rounded-xl text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={deleteAllRecords}
+                disabled={deletingAll}
+                className="flex-1 px-4 py-3 border border-transparent text-sm font-medium rounded-xl text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deletingAll ? (
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Eliminando...
+                  </div>
+                ) : (
+                  'Eliminar Todo'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de generador de facturas */}
+      {showInvoiceGenerator && selectedRecord && (
+        <InvoiceGenerator
+          medicalRecord={selectedRecord}
+          onClose={closeInvoiceGenerator}
+          onInvoiceCreated={handleInvoiceCreated}
+        />
+      )}
     </div>
   );
 };

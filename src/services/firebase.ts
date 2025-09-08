@@ -280,6 +280,36 @@ export const medicalRecordService = {
     });
     
     await batch.commit();
+  },
+
+  // Función para administradores: borrar todo el historial
+  deleteAllRecords: async () => {
+    try {
+      // Obtener todos los registros
+      const querySnapshot = await getDocs(collection(db, 'medicalRecords'));
+      
+      if (querySnapshot.empty) {
+        return { deletedCount: 0, message: 'No hay registros para eliminar' };
+      }
+      
+      // Crear batch para eliminar todos los documentos
+      const batch = writeBatch(db);
+      
+      querySnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      
+      // Ejecutar el batch
+      await batch.commit();
+      
+      return { 
+        deletedCount: querySnapshot.docs.length, 
+        message: `Se eliminaron ${querySnapshot.docs.length} registros correctamente` 
+      };
+    } catch (error) {
+      console.error('Error eliminando todos los registros:', error);
+      throw new Error(`Error al eliminar todos los registros: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    }
   }
 };
 
