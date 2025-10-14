@@ -17,7 +17,9 @@ const Login: React.FC = () => {
 
   // Lista de usuarios autorizados
   const authorizedUsers = [
-    'mj.sanchezsoler@gmail.com'
+    'mj.sanchezsoler@gmail.com',
+    'genepedmur@geneped.com',
+    'mjuliana.ballesta@carm.es'
   ];
 
   const handleSubmit = async (e: React.FormEvent) => {
