@@ -49,7 +49,8 @@ class PDFService {
     // Configuración de márgenes
     const margin = 20;
     const pageWidth = doc.internal.pageSize.getWidth();
-    const contentWidth = pageWidth - (margin * 2);
+    // Reducir un poco más el ancho para asegurar que el texto no se salga
+    const contentWidth = pageWidth - (margin * 2) - 5;
     let yPosition = margin;
 
     // Logo y encabezado
@@ -131,6 +132,7 @@ class PDFService {
     
     // Convertir HTML a texto plano para el PDF
     const plainText = this.convertFormattedTextToPlainText(record.report);
+    // Usar splitTextToSize con opciones explícitas para evitar problemas de espaciado
     const reportLines = doc.splitTextToSize(plainText, contentWidth);
     
     for (const line of reportLines) {
@@ -139,7 +141,11 @@ class PDFService {
         doc.addPage();
         yPosition = margin;
       }
-      doc.text(line, margin, yPosition, { align: 'left' }); // Sin justificar (alineado a la izquierda)
+      // Usar maxWidth explícito para asegurar que no se salga del margen
+      doc.text(line, margin, yPosition, { 
+        align: 'left',
+        maxWidth: contentWidth
+      });
       yPosition += 6; // Espaciado entre líneas
     }
 
@@ -160,7 +166,10 @@ class PDFService {
           doc.addPage();
           yPosition = margin;
         }
-        doc.text(line, margin, yPosition);
+        doc.text(line, margin, yPosition, { 
+          align: 'left',
+          maxWidth: contentWidth
+        });
         yPosition += 6;
       }
     }
@@ -312,10 +321,13 @@ class PDFService {
     // Convertir a texto manteniendo estructura
     let plainText = tempDiv.textContent || tempDiv.innerText || '';
     
-    // Limpiar espacios extra y normalizar
+    // Limpiar espacios extra y normalizar - pero preservar saltos de línea importantes
+    // Normalizar espacios múltiples a uno solo
     plainText = plainText
-      .replace(/\s+/g, ' ')
-      .replace(/\n\s*\n/g, '\n') // Eliminar líneas vacías múltiples
+      .replace(/[ \t]+/g, ' ') // Múltiples espacios/tabs a uno solo
+      .replace(/\n\s*\n\s*\n/g, '\n\n') // Múltiples saltos de línea a máximo 2
+      .replace(/\n /g, '\n') // Espacios al inicio de línea
+      .replace(/ \n/g, '\n') // Espacios al final de línea
       .trim();
     
     return plainText;
