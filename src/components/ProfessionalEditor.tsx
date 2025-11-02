@@ -5,11 +5,13 @@ import TextAlign from '@tiptap/extension-text-align';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
+import Underline from '@tiptap/extension-underline';
 import { TextStyle, Color } from '@tiptap/extension-text-style';
 import Highlight from '@tiptap/extension-highlight';
 import { 
   Bold, 
   Italic, 
+  Underline as UnderlineIcon,
   AlignLeft, 
   AlignCenter, 
   AlignRight, 

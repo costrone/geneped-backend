@@ -98,17 +98,18 @@ class PDFService {
 
     // Título del informe
     yPosition += 45;
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold'); // Helvetica es muy similar a Arial
     doc.text('INFORME CLÍNICO', pageWidth / 2, yPosition, { align: 'center' });
 
     // Información del paciente
     yPosition += 20;
-    doc.setFontSize(12);
+    doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.text('DATOS DEL PACIENTE:', margin, yPosition);
     
     yPosition += 10;
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
     doc.text(`Nombre: ${record.patientName} ${record.patientSurname}`, margin, yPosition);
     
@@ -118,18 +119,14 @@ class PDFService {
     yPosition += 8;
     doc.text(`Fecha de nacimiento: ${record.patientBirthDate}`, margin, yPosition);
 
-    // Tipo de informe
-    yPosition += 15;
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Tipo de informe: ${record.reportType}`, margin, yPosition);
-
     // Informe clínico
     yPosition += 15;
+    doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.text('INFORME CLÍNICO:', margin, yPosition);
     
     yPosition += 10;
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('helvetica', 'normal'); // Helvetica es visualmente muy similar a Arial
     doc.setFontSize(11);
     
     // Convertir HTML a texto plano para el PDF
@@ -142,17 +139,19 @@ class PDFService {
         doc.addPage();
         yPosition = margin;
       }
-      doc.text(line, margin, yPosition);
+      doc.text(line, margin, yPosition, { align: 'left' }); // Sin justificar (alineado a la izquierda)
       yPosition += 6; // Espaciado entre líneas
     }
 
     // Pruebas solicitadas (solo si existen)
     if (record.requestedTests && record.requestedTests.trim() !== '') {
       yPosition += 10;
+      doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
       doc.text('PRUEBAS SOLICITADAS:', margin, yPosition);
       
       yPosition += 10;
+      doc.setFontSize(11);
       doc.setFont('helvetica', 'normal');
       const testsLines = doc.splitTextToSize(record.requestedTests, contentWidth);
       
@@ -169,10 +168,12 @@ class PDFService {
     // Documentos adjuntos (solo si existen)
     if (record.uploadedDocuments && record.uploadedDocuments.length > 0) {
       yPosition += 10;
+      doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
       doc.text('DOCUMENTOS ADJUNTOS:', margin, yPosition);
       
       yPosition += 10;
+      doc.setFontSize(11);
       doc.setFont('helvetica', 'normal');
       
       record.uploadedDocuments.forEach((url, index) => {
@@ -303,8 +304,8 @@ class PDFService {
     // Procesar elementos específicos
     const paragraphs = tempDiv.querySelectorAll('p');
     paragraphs.forEach(p => {
-      // Asegurar que los párrafos tengan el formato correcto
-      p.style.textAlign = 'justify';
+      // Asegurar que los párrafos NO estén justificados (alineados a la izquierda)
+      p.style.textAlign = 'left';
       p.style.marginBottom = '0.5em';
     });
     
