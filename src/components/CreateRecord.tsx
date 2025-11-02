@@ -212,7 +212,10 @@ const CreateRecord: React.FC = () => {
       try {
         await auth.currentUser?.getIdToken(true);
       } catch (e) {
-        console.warn('No se pudo refrescar el token antes de escribir en Firestore', e);
+        console.warn(
+          'No se pudo refrescar el token antes de escribir en Firestore',
+          e
+        );
       }
 
       console.log('Creando paciente...');
@@ -279,10 +282,6 @@ const CreateRecord: React.FC = () => {
       // pdfService.downloadPDF(pdfFile);
 
       alert(`✅ Documento generado y protegido con contraseña: ${password}`);
-      alert('✅ Registro creado exitosamente. Redirigiendo al historial...');
-      alert(
-        '📄 El PDF se puede descargar desde el historial cuando sea necesario.'
-      );
 
       setSuccess(true);
       reset();

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { medicalRecordService } from '../services/firebase';
 import { MedicalRecord, SearchFilters } from '../types';
-import { Search, Filter, Download, Eye, Calendar, User, FileText, Clock, Trash2, Edit, Mail, Receipt, CreditCard, RefreshCw } from 'lucide-react';
+import { Search, Filter, Download, Eye, Calendar, User, FileText, Clock, Trash2, Edit, Mail, Receipt, CreditCard, RefreshCw, Paperclip, ExternalLink } from 'lucide-react';
 import { pdfService } from '../services/pdfService';
 import { useUser } from '../contexts/UserContext';
 import { AlertTriangle } from 'lucide-react';
@@ -573,6 +573,36 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
                       <p className="text-sm text-pastel-gray-dark line-clamp-2 leading-relaxed">
                         {record.report.substring(0, 200)}...
                       </p>
+                      
+                      {/* Documentos adjuntos */}
+                      {record.uploadedDocuments && record.uploadedDocuments.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-pastel-gray-light">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <Paperclip className="h-4 w-4 text-primary-600" />
+                            <span className="text-sm font-medium text-primary-700">
+                              Documentos adjuntos ({record.uploadedDocuments.length})
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {record.uploadedDocuments.map((url, index) => {
+                              const fileName = url.split('/').pop() || `Documento ${index + 1}`;
+                              return (
+                                <a
+                                  key={index}
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center space-x-1 px-3 py-1.5 bg-pastel-gray-light hover:bg-pastel-blue rounded-lg text-sm text-primary-700 transition-all duration-200"
+                                >
+                                  <FileText className="h-3 w-3" />
+                                  <span className="max-w-[150px] truncate">{fileName}</span>
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     
                     <div className="flex flex-wrap items-center gap-2 ml-4 sm:ml-6">

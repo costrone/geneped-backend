@@ -276,8 +276,8 @@ class PDFService {
       const pdfFile = await this.generateProtectedPDF(record);
       const password = this.generatePassword(record.patientDni);
 
-      // Subir PDF a Firebase Storage
-      const fileName = `pdfs/${record.patientDni}_${Date.now()}.pdf`;
+      // Subir PDF a Firebase Storage usando la estructura documents/{patientId}/pdfs/...
+      const fileName = `documents/${record.patientId}/pdfs/${record.patientDni}_${Date.now()}.pdf`;
       const downloadURL = await storageService.uploadFile(pdfFile, fileName);
 
       // Enviar email con enlace de descarga
