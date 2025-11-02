@@ -5,13 +5,11 @@ import TextAlign from '@tiptap/extension-text-align';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
-import Underline from '@tiptap/extension-underline';
 import { TextStyle, Color } from '@tiptap/extension-text-style';
 import Highlight from '@tiptap/extension-highlight';
 import { 
   Bold, 
   Italic, 
-  Underline as UnderlineIcon, 
   AlignLeft, 
   AlignCenter, 
   AlignRight, 
@@ -52,38 +50,52 @@ const ProfessionalEditor: React.FC<ProfessionalEditorProps> = ({
   const [showImageInput, setShowImageInput] = useState(false);
 
   const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: false,
-        codeBlock: false,
-        blockquote: false,
-        horizontalRule: false,
-      }),
-      TextAlign.configure({
-        types: ['heading', 'paragraph'],
-        alignments: ['left', 'center', 'right', 'justify'],
-      }),
-      Table,
-      TableRow,
-      TableHeader,
-      TableCell,
-      Image.configure({
-        allowBase64: true,
-        inline: true,
-      }),
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          class: 'text-blue-600 underline',
-        },
-      }),
-      Underline,
-      TextStyle,
-      Color,
-      Highlight.configure({
-        multicolor: true,
-      }),
-    ],
+    extensions: (() => {
+      const baseExtensions = [
+        StarterKit.configure({
+          heading: false,
+          codeBlock: false,
+          blockquote: false,
+          horizontalRule: false,
+        }),
+        TextAlign.configure({
+          types: ['heading', 'paragraph'],
+          alignments: ['left', 'center', 'right', 'justify'],
+        }),
+        Table,
+        TableRow,
+        TableHeader,
+        TableCell,
+        Image.configure({
+          allowBase64: true,
+          inline: true,
+        }),
+        Link.configure({
+          openOnClick: false,
+          HTMLAttributes: {
+            class: 'text-blue-600 underline',
+          },
+        }),
+        Underline,
+        TextStyle,
+        Color,
+        Highlight.configure({
+          multicolor: true,
+        }),
+      ];
+
+      // Deduplicar por nombre de extensión para evitar el warning de TipTap
+      const uniqueByName: any[] = [];
+      const seen = new Set<string>();
+      for (const ext of baseExtensions) {
+        const name = (ext as any)?.name;
+        if (!name || !seen.has(name)) {
+          if (name) seen.add(name);
+          uniqueByName.push(ext);
+        }
+      }
+      return uniqueByName;
+    })(),
     content: value || '',
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());

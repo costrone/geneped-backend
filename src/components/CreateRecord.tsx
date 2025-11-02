@@ -3,21 +3,54 @@ import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Download, AlertCircle, CheckCircle, User, Shield, Upload, X, File, TestTube } from 'lucide-react';
+import {
+  FileText,
+  Download,
+  AlertCircle,
+  CheckCircle,
+  User,
+  Shield,
+  Upload,
+  X,
+  File,
+  TestTube,
+} from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
-import { patientService, medicalRecordService, storageService } from '../services/firebase';
+import {
+  patientService,
+  medicalRecordService,
+  storageService,
+  auth,
+} from '../services/firebase';
 import { pdfService } from '../services/pdfService';
 import ProfessionalEditor from './ProfessionalEditor';
 
-const schema = yup.object({
-  name: yup.string().required('El nombre es obligatorio').min(2, 'El nombre debe tener al menos 2 caracteres'),
-  surname: yup.string().required('El apellido es obligatorio').min(2, 'El apellido debe tener al menos 2 caracteres'),
-  dni: yup.string().required('El DNI es obligatorio').matches(/^\d{8}[A-Z]$/, 'El DNI debe tener 8 números y una letra'),
-  birthDate: yup.string().required('La fecha de nacimiento es obligatoria'),
-  reportType: yup.string().oneOf(['Geneped', 'Medicaes'], 'Debe seleccionar un tipo de informe').required('El tipo de informe es obligatorio'),
-  report: yup.string().required('El informe clínico es obligatorio').min(10, 'El informe clínico debe tener al menos 10 caracteres'),
-  requestedTests: yup.string().optional().nullable()
-}).required();
+const schema = yup
+  .object({
+    name: yup
+      .string()
+      .required('El nombre es obligatorio')
+      .min(2, 'El nombre debe tener al menos 2 caracteres'),
+    surname: yup
+      .string()
+      .required('El apellido es obligatorio')
+      .min(2, 'El apellido debe tener al menos 2 caracteres'),
+    dni: yup
+      .string()
+      .required('El DNI es obligatorio')
+      .matches(/^\d{8}[A-Z]$/, 'El DNI debe tener 8 números y una letra'),
+    birthDate: yup.string().required('La fecha de nacimiento es obligatoria'),
+    reportType: yup
+      .string()
+      .oneOf(['Geneped', 'Medicaes'], 'Debe seleccionar un tipo de informe')
+      .required('El tipo de informe es obligatorio'),
+    report: yup
+      .string()
+      .required('El informe clínico es obligatorio')
+      .min(10, 'El informe clínico debe tener al menos 10 caracteres'),
+    requestedTests: yup.string().optional().nullable(),
+  })
+  .required();
 
 type FormData = yup.InferType<typeof schema>;
 
@@ -40,9 +73,9 @@ const CreateRecord: React.FC = () => {
     reset,
     formState: { errors },
     watch,
-    setValue
+    setValue,
   } = useForm<FormData>({
-    resolver: yupResolver(schema)
+    resolver: yupResolver(schema),
   });
 
   // Función para manejar la carga de archivos
@@ -85,14 +118,14 @@ const CreateRecord: React.FC = () => {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    
+
     const files = Array.from(e.dataTransfer.files);
     const validFiles = files.filter(file => {
       const validTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
       const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
       return validTypes.includes(fileExtension);
     });
-    
+
     if (validFiles.length > 0) {
       setUploadedFiles(prev => [...prev, ...validFiles]);
     }
@@ -112,10 +145,10 @@ const CreateRecord: React.FC = () => {
   const handlePDFDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsPDFDragOver(false);
-    
+
     const files = Array.from(e.dataTransfer.files);
     const pdfFile = files.find(file => file.type === 'application/pdf');
-    
+
     if (pdfFile) {
       setUploadedPDF(pdfFile);
     } else if (files.length > 0) {
@@ -129,17 +162,23 @@ const CreateRecord: React.FC = () => {
 
     setProtectingPDF(true);
     try {
-      const password = pdfService.generatePassword(uploadedPDF.name.split('_')[0] || '12345678A');
-      const protectedPDF = await pdfService.generateProtectedPDFFromFile(uploadedPDF, password);
-      
+      const password = pdfService.generatePassword(
+        uploadedPDF.name.split('_')[0] || '12345678A'
+      );
+      const protectedPDF = await pdfService.generateProtectedPDFFromFile(
+        uploadedPDF,
+        password
+      );
+
       // Descargar PDF protegido
       pdfService.downloadPDF(protectedPDF);
-      
+
       alert(`✅ PDF protegido con contraseña: ${password}`);
-      
+
       // Mostrar alerta de confidencialidad
-      alert('⚠️ Por motivos de confidencialidad le recomendamos que elimine el archivo subido de su dispositivo.');
-      
+      alert(
+        '⚠️ Por motivos de confidencialidad le recomendamos que elimine el archivo subido de su dispositivo.'
+      );
     } catch (error) {
       console.error('Error protegiendo PDF:', error);
       alert('❌ Error al proteger el PDF. Por favor, inténtalo de nuevo.');
@@ -152,10 +191,12 @@ const CreateRecord: React.FC = () => {
     console.log('=== INICIO onSubmit ===');
     console.log('Datos del formulario:', data);
     console.log('Usuario:', user);
-    
+
     if (!user?.uid) {
       console.log('ERROR: No hay user.uid');
-      setError('No se pudo obtener la información del usuario. Por favor, inicia sesión nuevamente.');
+      setError(
+        'No se pudo obtener la información del usuario. Por favor, inicia sesión nuevamente.'
+      );
       return;
     }
 
@@ -166,22 +207,34 @@ const CreateRecord: React.FC = () => {
 
     try {
       console.log('Iniciando creación del registro...');
-      
-      let documentUrls: string[] = [];
-      if (uploadedFiles.length > 0) {
-        console.log('Subiendo archivos...');
-        documentUrls = await storageService.uploadDocuments(uploadedFiles, `temp_${Date.now()}`);
-        console.log('Archivos subidos:', documentUrls);
+
+      // Refrescar token para evitar request.auth null en reglas
+      try {
+        await auth.currentUser?.getIdToken(true);
+      } catch (e) {
+        console.warn('No se pudo refrescar el token antes de escribir en Firestore', e);
       }
 
       console.log('Creando paciente...');
       const patientId = await patientService.create({
+        userId: user.uid,
         name: data.name,
         surname: data.surname,
         dni: data.dni,
-        birthDate: data.birthDate
+        birthDate: data.birthDate,
       });
       console.log('Paciente creado con ID:', patientId);
+
+      // Subir documentos ahora que tenemos patientId
+      let documentUrls: string[] = [];
+      if (uploadedFiles.length > 0) {
+        console.log('Subiendo archivos...');
+        documentUrls = await storageService.uploadDocuments(
+          uploadedFiles,
+          patientId
+        );
+        console.log('Archivos subidos:', documentUrls);
+      }
 
       // Crear el objeto del registro sin campos undefined
       const recordData: any = {
@@ -195,7 +248,7 @@ const CreateRecord: React.FC = () => {
         report: data.report,
         invoiceIssued: false,
         paid: false,
-        password: pdfService.generatePassword(data.dni)
+        password: pdfService.generatePassword(data.dni),
       };
 
       // Solo añadir campos si tienen valores válidos
@@ -209,33 +262,35 @@ const CreateRecord: React.FC = () => {
 
       console.log('Datos del registro a crear:', recordData);
       console.log('Llamando a medicalRecordService.create...');
-      
+
       const recordId = await medicalRecordService.create(recordData);
       console.log('Registro creado con ID:', recordId);
-      
+
       console.log('Generando PDF...');
       await pdfService.generateProtectedPDF({
         ...recordData,
         id: recordId,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       });
 
       const password = recordData.password;
       // No descargar automáticamente por razones de confidencialidad
       // pdfService.downloadPDF(pdfFile);
-      
+
       alert(`✅ Documento generado y protegido con contraseña: ${password}`);
       alert('✅ Registro creado exitosamente. Redirigiendo al historial...');
-      alert('📄 El PDF se puede descargar desde el historial cuando sea necesario.');
+      alert(
+        '📄 El PDF se puede descargar desde el historial cuando sea necesario.'
+      );
 
       setSuccess(true);
       reset();
       setUploadedFiles([]);
       setUploadedPDF(null);
-      
+
       console.log('=== FIN onSubmit - ÉXITO ===');
-      
+
       // Navegar al historial después de crear el registro
       setTimeout(() => {
         navigate('/history');
@@ -270,7 +325,9 @@ const CreateRecord: React.FC = () => {
               <FileText className="h-6 w-6 text-primary-600" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-primary-700">Nuevo Historial Médico</h2>
+              <h2 className="text-2xl font-bold text-primary-700">
+                Nuevo Historial Médico
+              </h2>
               <p className="text-primary-600 text-sm">
                 Introduce los datos del paciente y redacta el informe clínico
               </p>
@@ -283,12 +340,17 @@ const CreateRecord: React.FC = () => {
           <div className="bg-pastel-gray-light rounded-xl p-6">
             <div className="flex items-center space-x-2 mb-4">
               <User className="h-5 w-5 text-primary-600" />
-              <h3 className="text-lg font-semibold text-primary-700">Datos del Paciente</h3>
+              <h3 className="text-lg font-semibold text-primary-700">
+                Datos del Paciente
+              </h3>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-primary-700 mb-2">
+                <label
+                  htmlFor="name"
+                  className="block text-sm font-medium text-primary-700 mb-2"
+                >
                   Nombre *
                 </label>
                 <input
@@ -307,7 +369,10 @@ const CreateRecord: React.FC = () => {
               </div>
 
               <div>
-                <label htmlFor="surname" className="block text-sm font-medium text-primary-700 mb-2">
+                <label
+                  htmlFor="surname"
+                  className="block text-sm font-medium text-primary-700 mb-2"
+                >
                   Apellidos *
                 </label>
                 <input
@@ -326,7 +391,10 @@ const CreateRecord: React.FC = () => {
               </div>
 
               <div>
-                <label htmlFor="dni" className="block text-sm font-medium text-primary-700 mb-2">
+                <label
+                  htmlFor="dni"
+                  className="block text-sm font-medium text-primary-700 mb-2"
+                >
                   DNI *
                 </label>
                 <input
@@ -345,7 +413,10 @@ const CreateRecord: React.FC = () => {
               </div>
 
               <div>
-                <label htmlFor="birthDate" className="block text-sm font-medium text-primary-700 mb-2">
+                <label
+                  htmlFor="birthDate"
+                  className="block text-sm font-medium text-primary-700 mb-2"
+                >
                   Fecha de Nacimiento *
                 </label>
                 <input
@@ -368,15 +439,17 @@ const CreateRecord: React.FC = () => {
           <div className="bg-pastel-gray-light rounded-xl p-6">
             <div className="flex items-center space-x-2 mb-4">
               <Upload className="h-5 w-5 text-primary-600" />
-              <h3 className="text-lg font-semibold text-primary-700">Documentos Adjuntos</h3>
+              <h3 className="text-lg font-semibold text-primary-700">
+                Documentos Adjuntos
+              </h3>
             </div>
 
             <div className="space-y-4">
               {/* Área de carga */}
-              <div 
+              <div
                 className={`border-2 border-dashed rounded-xl p-6 text-center transition-all duration-200 ${
-                  isDragOver 
-                    ? 'border-primary-500 bg-primary-50' 
+                  isDragOver
+                    ? 'border-primary-500 bg-primary-50'
                     : 'border-pastel-gray-light hover:border-primary-300'
                 }`}
                 onDragOver={handleDragOver}
@@ -392,11 +465,16 @@ const CreateRecord: React.FC = () => {
                   id="file-upload"
                 />
                 <label htmlFor="file-upload" className="cursor-pointer">
-                  <Upload className={`h-8 w-8 mx-auto mb-2 ${
-                    isDragOver ? 'text-primary-600' : 'text-primary-400'
-                  }`} />
+                  <Upload
+                    className={`h-8 w-8 mx-auto mb-2 ${
+                      isDragOver ? 'text-primary-600' : 'text-primary-400'
+                    }`}
+                  />
                   <p className="text-sm text-primary-600 mb-1">
-                    <span className="font-medium text-primary-700">Haz clic para subir</span> o arrastra los archivos aquí
+                    <span className="font-medium text-primary-700">
+                      Haz clic para subir
+                    </span>{' '}
+                    o arrastra los archivos aquí
                   </p>
                   <p className="text-xs text-primary-500">
                     PDF, DOC, DOCX, JPG, PNG (máx. 10MB por archivo)
@@ -412,13 +490,20 @@ const CreateRecord: React.FC = () => {
               {/* Lista de archivos subidos */}
               {uploadedFiles.length > 0 && (
                 <div className="space-y-2">
-                  <h4 className="text-sm font-medium text-primary-700">Archivos subidos:</h4>
+                  <h4 className="text-sm font-medium text-primary-700">
+                    Archivos subidos:
+                  </h4>
                   {uploadedFiles.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border border-pastel-gray-light">
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-3 bg-white rounded-lg border border-pastel-gray-light"
+                    >
                       <div className="flex items-center space-x-3">
                         <File className="h-4 w-4 text-primary-500" />
                         <div>
-                          <p className="text-sm font-medium text-primary-700">{file.name}</p>
+                          <p className="text-sm font-medium text-primary-700">
+                            {file.name}
+                          </p>
                           <p className="text-xs text-primary-500">
                             {(file.size / 1024 / 1024).toFixed(2)} MB
                           </p>
@@ -449,19 +534,22 @@ const CreateRecord: React.FC = () => {
           <div className="bg-pastel-gray-light rounded-xl p-6">
             <div className="flex items-center space-x-2 mb-4">
               <Shield className="h-5 w-5 text-primary-600" />
-              <h3 className="text-lg font-semibold text-primary-700">Subir PDF Directamente</h3>
+              <h3 className="text-lg font-semibold text-primary-700">
+                Subir PDF Directamente
+              </h3>
             </div>
 
             <div className="space-y-4">
               <p className="text-sm text-primary-600 mb-4">
-                Si ya tienes un PDF con la historia clínica, puedes subirlo directamente para protegerlo con contraseña.
+                Si ya tienes un PDF con la historia clínica, puedes subirlo
+                directamente para protegerlo con contraseña.
               </p>
 
               {/* Área de carga de PDF */}
-              <div 
+              <div
                 className={`border-2 border-dashed rounded-xl p-6 text-center transition-all duration-200 ${
-                  isPDFDragOver 
-                    ? 'border-primary-500 bg-primary-50' 
+                  isPDFDragOver
+                    ? 'border-primary-500 bg-primary-50'
                     : 'border-pastel-gray-light hover:border-primary-300'
                 }`}
                 onDragOver={handlePDFDragOver}
@@ -476,11 +564,16 @@ const CreateRecord: React.FC = () => {
                   id="pdf-upload"
                 />
                 <label htmlFor="pdf-upload" className="cursor-pointer">
-                  <FileText className={`h-8 w-8 mx-auto mb-2 ${
-                    isPDFDragOver ? 'text-primary-600' : 'text-primary-400'
-                  }`} />
+                  <FileText
+                    className={`h-8 w-8 mx-auto mb-2 ${
+                      isPDFDragOver ? 'text-primary-600' : 'text-primary-400'
+                    }`}
+                  />
                   <p className="text-sm text-primary-600 mb-1">
-                    <span className="font-medium text-primary-700">Haz clic para subir PDF</span> o arrastra el archivo aquí
+                    <span className="font-medium text-primary-700">
+                      Haz clic para subir PDF
+                    </span>{' '}
+                    o arrastra el archivo aquí
                   </p>
                   <p className="text-xs text-primary-500">
                     Solo archivos PDF (máx. 10MB)
@@ -500,7 +593,9 @@ const CreateRecord: React.FC = () => {
                     <div className="flex items-center space-x-3">
                       <FileText className="h-4 w-4 text-primary-500" />
                       <div>
-                        <p className="text-sm font-medium text-primary-700">{uploadedPDF.name}</p>
+                        <p className="text-sm font-medium text-primary-700">
+                          {uploadedPDF.name}
+                        </p>
                         <p className="text-xs text-primary-500">
                           {(uploadedPDF.size / 1024 / 1024).toFixed(2)} MB
                         </p>
@@ -543,10 +638,15 @@ const CreateRecord: React.FC = () => {
           <div className="bg-pastel-gray-light rounded-xl p-6">
             <div className="flex items-center space-x-2 mb-4">
               <TestTube className="h-5 w-5 text-primary-600" />
-              <h3 className="text-lg font-semibold text-primary-700">Pruebas Solicitadas</h3>
+              <h3 className="text-lg font-semibold text-primary-700">
+                Pruebas Solicitadas
+              </h3>
             </div>
             <div>
-              <label htmlFor="requestedTests" className="block text-sm font-medium text-primary-700 mb-2">
+              <label
+                htmlFor="requestedTests"
+                className="block text-sm font-medium text-primary-700 mb-2"
+              >
                 Pruebas solicitadas (opcional)
               </label>
               <textarea
@@ -563,7 +663,9 @@ const CreateRecord: React.FC = () => {
           <div className="bg-pastel-gray-light rounded-xl p-6">
             <div className="flex items-center space-x-2 mb-4">
               <Shield className="h-5 w-5 text-primary-600" />
-              <h3 className="text-lg font-semibold text-primary-700">Tipo de Informe</h3>
+              <h3 className="text-lg font-semibold text-primary-700">
+                Tipo de Informe
+              </h3>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -576,8 +678,14 @@ const CreateRecord: React.FC = () => {
                     className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-pastel-gray-light"
                   />
                   <div className="flex items-center space-x-3">
-                    <img src="/logo.png" alt="Geneped" className="w-8 h-8 object-contain" />
-                    <span className="text-sm font-medium text-primary-700">Geneped</span>
+                    <img
+                      src="/logo.png"
+                      alt="Geneped"
+                      className="w-8 h-8 object-contain"
+                    />
+                    <span className="text-sm font-medium text-primary-700">
+                      Geneped
+                    </span>
                   </div>
                 </label>
               </div>
@@ -591,8 +699,14 @@ const CreateRecord: React.FC = () => {
                     className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-pastel-gray-light"
                   />
                   <div className="flex items-center space-x-3">
-                    <img src="/Medicaes.png" alt="Medicaes" className="w-8 h-8 object-contain" />
-                    <span className="text-sm font-medium text-primary-700">Medicaes</span>
+                    <img
+                      src="/Medicaes.png"
+                      alt="Medicaes"
+                      className="w-8 h-8 object-contain"
+                    />
+                    <span className="text-sm font-medium text-primary-700">
+                      Medicaes
+                    </span>
                   </div>
                 </label>
               </div>
@@ -610,15 +724,20 @@ const CreateRecord: React.FC = () => {
           <div className="bg-pastel-gray-light rounded-xl p-6">
             <div className="flex items-center space-x-2 mb-4">
               <FileText className="h-5 w-5 text-primary-600" />
-              <h3 className="text-lg font-semibold text-primary-700">Informe Clínico</h3>
+              <h3 className="text-lg font-semibold text-primary-700">
+                Informe Clínico
+              </h3>
             </div>
             <div>
-              <label htmlFor="report" className="block text-sm font-medium text-primary-700 mb-2">
+              <label
+                htmlFor="report"
+                className="block text-sm font-medium text-primary-700 mb-2"
+              >
                 Informe Clínico *
               </label>
               <ProfessionalEditor
                 value={watch('report') || ''}
-                onChange={(value) => setValue('report', value)}
+                onChange={value => setValue('report', value)}
                 placeholder="Escribe el informe clínico aquí..."
                 className="w-full"
               />
@@ -637,7 +756,9 @@ const CreateRecord: React.FC = () => {
               {success && (
                 <div className="flex items-center space-x-2 text-green-600">
                   <CheckCircle className="h-5 w-5" />
-                  <span className="text-sm font-medium">Historial creado exitosamente</span>
+                  <span className="text-sm font-medium">
+                    Historial creado exitosamente
+                  </span>
                 </div>
               )}
               {error && (
@@ -685,4 +806,4 @@ const CreateRecord: React.FC = () => {
   );
 };
 
-export default CreateRecord; 
+export default CreateRecord;

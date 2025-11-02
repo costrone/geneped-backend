@@ -15,18 +15,22 @@ export const useAutoCleanup = () => {
         await medicalRecordService.cleanupOldDeleted(user.uid);
         console.log('🧹 Limpieza automática completada para el usuario:', user.uid);
       } catch (error) {
-        console.error('Error en limpieza automática:', error);
+        const err: any = error;
+        console.error('Error en limpieza automática:', err?.code || err?.message || err);
       }
     };
 
-    // Ejecutar limpieza inmediatamente al cargar
-    cleanupOldRecords();
+    // Ejecutar limpieza con un pequeño retraso para asegurar auth/claims
+    const timeoutId = setTimeout(() => {
+      cleanupOldRecords();
+    }, 3000);
 
     // Configurar limpieza automática cada 24 horas
     intervalRef.current = setInterval(cleanupOldRecords, 24 * 60 * 60 * 1000);
 
     // Limpiar el intervalo cuando el componente se desmonte
     return () => {
+      clearTimeout(timeoutId);
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }

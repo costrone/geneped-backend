@@ -139,7 +139,7 @@ const EditRecord: React.FC = () => {
     try {
       let documentUrls: string[] = [];
       if (uploadedFiles.length > 0) {
-        documentUrls = await storageService.uploadDocuments(uploadedFiles, `temp_${Date.now()}`);
+        documentUrls = await storageService.uploadDocuments(uploadedFiles, patient.id!);
       }
 
       const allDocuments = [

@@ -70,12 +70,24 @@ export const authService = {
 // Servicio de pacientes
 export const patientService = {
   create: async (patient: Omit<Patient, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const docRef = await addDoc(collection(db, 'patients'), {
+    const currentUid = auth.currentUser?.uid;
+    const payload: any = {
       ...patient,
+      // Asegurar userId si no viene incluido explícitamente
+      ...(patient as any).userId ? {} : (currentUid ? { userId: currentUid } : {}),
       createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    });
-    return docRef.id;
+      updatedAt: Timestamp.now(),
+    };
+
+    console.log('[patients.create] payload a escribir:', payload);
+    try {
+      const docRef = await addDoc(collection(db, 'patients'), payload);
+      console.log('[patients.create] creado con id:', docRef.id);
+      return docRef.id;
+    } catch (err: any) {
+      console.error('[patients.create] error code:', err?.code, 'message:', err?.message);
+      throw err;
+    }
   },
 
   update: async (id: string, updates: Partial<Patient>) => {
