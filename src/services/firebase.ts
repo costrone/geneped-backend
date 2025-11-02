@@ -70,7 +70,10 @@ export const authService = {
 // Servicio de pacientes
 export const patientService = {
   create: async (patient: Omit<Patient, 'id' | 'createdAt' | 'updatedAt'>) => {
+    console.log('[patients.create] INICIO - paciente recibido:', patient);
     const currentUid = auth.currentUser?.uid;
+    console.log('[patients.create] currentUid:', currentUid);
+    
     const payload: any = {
       ...patient,
       // Asegurar userId si no viene incluido explícitamente
@@ -79,13 +82,19 @@ export const patientService = {
       updatedAt: Timestamp.now(),
     };
 
-    console.log('[patients.create] payload a escribir:', payload);
+    console.log('[patients.create] payload final a escribir:', JSON.stringify(payload, null, 2));
+    console.log('[patients.create] userId en payload:', payload.userId);
+    console.log('[patients.create] currentUid coincide?', payload.userId === currentUid);
+    
     try {
+      console.log('[patients.create] Intentando addDoc...');
       const docRef = await addDoc(collection(db, 'patients'), payload);
-      console.log('[patients.create] creado con id:', docRef.id);
+      console.log('[patients.create] ✅ CREADO con id:', docRef.id);
       return docRef.id;
     } catch (err: any) {
-      console.error('[patients.create] error code:', err?.code, 'message:', err?.message);
+      console.error('[patients.create] ❌ ERROR code:', err?.code);
+      console.error('[patients.create] ❌ ERROR message:', err?.message);
+      console.error('[patients.create] ❌ ERROR completo:', err);
       throw err;
     }
   },
@@ -114,8 +123,12 @@ export const patientService = {
     return null;
   },
 
-  getAll: async () => {
-    const querySnapshot = await getDocs(collection(db, 'patients'));
+  getAll: async (userId: string) => {
+    const q = query(
+      collection(db, 'patients'),
+      where('userId', '==', userId)
+    );
+    const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
@@ -161,56 +174,34 @@ export const medicalRecordService = {
   },
 
   getAll: async (userId: string, filters?: SearchFilters) => {
-    console.log('=== INICIO getAll ===');
-    console.log('Usuario solicitado:', userId);
-    
     try {
-      // Consulta simple: obtener todos los documentos sin filtros
-      const simpleQuery = query(collection(db, 'medicalRecords'));
-      const snapshot = await getDocs(simpleQuery);
-      
-      console.log('Total de documentos en Firestore:', snapshot.docs.length);
-      
-      // Convertir todos los documentos
-      const allRecords = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate(),
-        updatedAt: doc.data().updatedAt?.toDate(),
-        deletedAt: doc.data().deletedAt?.toDate()
-      })) as MedicalRecord[];
-      
-      console.log('Todos los registros convertidos:', allRecords.length);
-      
-      // Mostrar información de cada registro
-      allRecords.forEach((record, index) => {
-        console.log(`Registro ${index + 1}:`, {
-          id: record.id,
-          userId: record.userId,
-          patientName: record.patientName,
-          deletedAt: record.deletedAt
-        });
-      });
-      
-      // Filtrar por usuario y no eliminados
-      const userRecords = allRecords.filter(record => {
-        const isUserRecord = !record.userId || record.userId === userId;
-        const isNotDeleted = !record.deletedAt;
-        console.log(`Registro ${record.id}: userId=${record.userId}, deletedAt=${record.deletedAt}, isUserRecord=${isUserRecord}, isNotDeleted=${isNotDeleted}`);
-        return isUserRecord && isNotDeleted;
-      });
-      
-      console.log('Registros filtrados para el usuario:', userRecords.length);
-      
-      // Ordenar por fecha
-      const sortedRecords = userRecords.sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      // Consulta filtrada por userId directamente en Firestore
+      const q = query(
+        collection(db, 'medicalRecords'),
+        where('userId', '==', userId)
       );
       
-      console.log('Registros finales ordenados:', sortedRecords.length);
-      console.log('=== FIN getAll ===');
+      const snapshot = await getDocs(q);
       
-      return sortedRecords;
+      // Convertir documentos y filtrar no eliminados
+      const records = snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate(),
+          updatedAt: doc.data().updatedAt?.toDate(),
+          deletedAt: doc.data().deletedAt?.toDate()
+        })) as MedicalRecord[];
+      
+      // Filtrar registros no eliminados (a menos que se pida incluir eliminados)
+      const activeRecords = filters?.includeDeleted 
+        ? records 
+        : records.filter(record => !record.deletedAt);
+      
+      // Ordenar por fecha (más recientes primero)
+      return activeRecords.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
     } catch (error) {
       console.error('Error en getAll:', error);
       throw error;
