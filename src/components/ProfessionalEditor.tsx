@@ -59,6 +59,8 @@ const ProfessionalEditor: React.FC<ProfessionalEditorProps> = ({
           codeBlock: false,
           blockquote: false,
           horizontalRule: false,
+          link: false, // Desactivar Link de StarterKit, usamos nuestra propia configuración
+          underline: false, // Desactivar Underline de StarterKit, usamos nuestra propia extensión
         }),
         TextAlign.configure({
           types: ['heading', 'paragraph'],
@@ -89,13 +91,34 @@ const ProfessionalEditor: React.FC<ProfessionalEditorProps> = ({
       // Deduplicar por nombre de extensión para evitar el warning de TipTap
       const uniqueByName: any[] = [];
       const seen = new Set<string>();
+      
       for (const ext of baseExtensions) {
-        const name = (ext as any)?.name;
-        if (!name || !seen.has(name)) {
-          if (name) seen.add(name);
-          uniqueByName.push(ext);
+        // Obtener el nombre de la extensión de diferentes maneras posibles
+        const name = (ext as any)?.name || 
+                    (ext as any)?.constructor?.name ||
+                    (ext as any)?.extensionName;
+        
+        if (name && seen.has(name)) {
+          // Ya existe una extensión con este nombre, saltarla
+          console.log(`[ProfessionalEditor] Saltando extensión duplicada: ${name}`);
+          continue;
         }
+        
+        if (name) {
+          seen.add(name);
+        }
+        
+        uniqueByName.push(ext);
       }
+      
+      // Log para debug (solo en desarrollo)
+      if (process.env.NODE_ENV === 'development') {
+        const extensionNames = uniqueByName.map((ext: any) => 
+          (ext as any)?.name || (ext as any)?.constructor?.name || 'unknown'
+        );
+        console.log('[ProfessionalEditor] Extensiones cargadas:', extensionNames);
+      }
+      
       return uniqueByName;
     })(),
     content: value || '',

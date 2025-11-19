@@ -25,6 +25,7 @@ export interface MedicalRecord {
   paid?: boolean; // Pagado (sí/no)
   pdfUrl?: string;
   password: string;
+  recordNumber?: string; // Número de historia (formato MMaann)
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date; // Campo para la papelera
@@ -99,7 +100,14 @@ export interface Invoice {
 
 export interface AuditLog {
   id: string;
-  action: 'created' | 'modified' | 'sent' | 'paid' | 'cancelled' | 'viewed' | 'exported';
+  action:
+    | 'created'
+    | 'modified'
+    | 'sent'
+    | 'paid'
+    | 'cancelled'
+    | 'viewed'
+    | 'exported';
   userId: string;
   userEmail: string;
   timestamp: Date;
@@ -122,4 +130,17 @@ export interface SearchFilters {
   invoiceIssued?: boolean; // Filtro por factura emitida
   paid?: boolean; // Filtro por pagado
   includeDeleted?: boolean; // Para incluir registros eliminados en búsquedas
-} 
+}
+
+// Borrador de factura para guardado automático
+export interface InvoiceDraft {
+  id?: string;
+  userId: string;
+  medicalRecordId: string;
+  companyInfo: CompanyInfo;
+  items: Omit<InvoiceItem, 'id' | 'subtotal' | 'taxAmount' | 'total'>[];
+  isPaid?: boolean;
+  paymentMethod?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}

@@ -16,6 +16,8 @@ import {
   deleteDoc, 
   query, 
   where, 
+  orderBy,
+  limit,
   Timestamp,
   writeBatch 
 } from 'firebase/firestore';
@@ -140,24 +142,136 @@ export const patientService = {
 
 // Servicio de historiales médicos
 export const medicalRecordService = {
+  // Generar siguiente número de historia (formato MMaann)
+  generateNextRecordNumber: async (userId: string): Promise<string> => {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, '0'); // Mes: 01-12
+    const year = String(now.getFullYear()).slice(-2); // Año: últimos 2 dígitos
+    
+    const prefix = `${month}${year}`; // Formato: 1125 para noviembre 2025
+    
+    try {
+      // Buscar todos los registros del usuario que tienen recordNumber con el prefijo del mes actual
+      // Primero buscar por recordNumber con rango para encontrar todos los números del mes
+      const q = query(
+        collection(db, 'medicalRecords'),
+        where('userId', '==', userId),
+        where('recordNumber', '>=', `${prefix}00`),
+        where('recordNumber', '<=', `${prefix}99`),
+        orderBy('recordNumber', 'desc'),
+        limit(1)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      console.log(`[generateNextRecordNumber] Buscando registros del mes ${prefix} para usuario ${userId}`);
+      console.log(`[generateNextRecordNumber] Total de documentos encontrados: ${querySnapshot.size}`);
+      
+      // Encontrar el último número usado
+      let maxNumber = 0;
+      
+      if (!querySnapshot.empty) {
+        const firstDoc = querySnapshot.docs[0];
+        const record = firstDoc.data() as MedicalRecord;
+        
+        console.log(`[generateNextRecordNumber] Registro con número más alto encontrado:`, {
+          id: firstDoc.id,
+          recordNumber: record.recordNumber,
+          createdAt: record.createdAt,
+          patientName: record.patientName
+        });
+        
+        if (record.recordNumber && record.recordNumber.startsWith(prefix)) {
+          maxNumber = parseInt(record.recordNumber.slice(-2), 10);
+          console.log(`[generateNextRecordNumber] Número máximo extraído: ${maxNumber} (de ${record.recordNumber})`);
+        }
+      } else {
+        console.log(`[generateNextRecordNumber] No se encontraron registros con números del mes ${prefix}`);
+      }
+      
+      // Si no hay registros con número asignado, empezar desde 01
+      // Generar siguiente número (o 01 si es el primero)
+      const nextNumber = maxNumber === 0 ? 1 : maxNumber + 1;
+      const sequentialNumber = String(nextNumber).padStart(2, '0');
+      
+      return `${prefix}${sequentialNumber}`;
+      } catch (error) {
+        console.error('Error generando número de historia:', error);
+        // Si hay error (puede ser por falta de índice), intentar buscar sin ordenar por recordNumber
+        try {
+          console.log('[generateNextRecordNumber] Intentando fallback sin ordenar por recordNumber...');
+          const q = query(
+            collection(db, 'medicalRecords'),
+            where('userId', '==', userId),
+            where('recordNumber', '>=', `${prefix}00`),
+            where('recordNumber', '<=', `${prefix}99`)
+          );
+          const snapshot = await getDocs(q);
+          
+          // Buscar el número máximo manualmente
+          let maxNumber = 0;
+          
+          if (!snapshot.empty) {
+            snapshot.docs.forEach(docSnapshot => {
+              const record = docSnapshot.data() as MedicalRecord;
+              if (record.recordNumber && record.recordNumber.startsWith(prefix)) {
+                const sequentialPart = parseInt(record.recordNumber.slice(-2), 10);
+                if (sequentialPart > maxNumber) {
+                  maxNumber = sequentialPart;
+                  console.log(`[generateNextRecordNumber] Fallback: encontrado número ${sequentialPart} en registro ${docSnapshot.id}`);
+                }
+              }
+            });
+          }
+          
+          const nextNumber = maxNumber === 0 ? 1 : maxNumber + 1;
+          const sequentialNumber = String(nextNumber).padStart(2, '0');
+          console.log(`[generateNextRecordNumber] Fallback: generando número ${prefix}${sequentialNumber}`);
+          return `${prefix}${sequentialNumber}`;
+        } catch (fallbackError) {
+          console.error('[generateNextRecordNumber] Error en fallback:', fallbackError);
+          // Si todo falla, empezar desde 01
+          return `${prefix}01`;
+        }
+      }
+  },
+
   create: async (record: Omit<MedicalRecord, 'id' | 'createdAt' | 'updatedAt'>) => {
-    console.log('Creando registro médico:', record);
+    console.log('[medicalRecords.create] INICIO - registro recibido:', record);
+    
+    // Si no tiene número de historia, generarlo
+    if (!record.recordNumber && record.userId) {
+      console.log('[medicalRecords.create] Generando número de historia...');
+      record.recordNumber = await medicalRecordService.generateNextRecordNumber(record.userId);
+      console.log('[medicalRecords.create] Número de historia generado:', record.recordNumber);
+    }
     
     // Filtrar campos undefined antes de crear el documento
     const cleanRecord = Object.fromEntries(
       Object.entries(record).filter(([_, value]) => value !== undefined)
     );
     
-    console.log('Registro limpio:', cleanRecord);
+    console.log('[medicalRecords.create] Registro limpio:', cleanRecord);
+    console.log('[medicalRecords.create] Intentando crear en colección: medicalRecords');
     
-    const docRef = await addDoc(collection(db, 'medicalRecords'), {
-      ...cleanRecord,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    });
-    
-    console.log('Registro creado con ID:', docRef.id);
-    return docRef.id;
+    try {
+      const docRef = await addDoc(collection(db, 'medicalRecords'), {
+        ...cleanRecord,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      });
+      
+      console.log('[medicalRecords.create] ✅ Registro creado exitosamente');
+      console.log('[medicalRecords.create] ID del documento:', docRef.id);
+      console.log('[medicalRecords.create] Ruta completa:', `medicalRecords/${docRef.id}`);
+      return docRef.id;
+    } catch (error: any) {
+      console.error('[medicalRecords.create] ❌ ERROR al crear registro médico');
+      console.error('[medicalRecords.create] Código de error:', error?.code);
+      console.error('[medicalRecords.create] Mensaje de error:', error?.message);
+      console.error('[medicalRecords.create] Error completo:', error);
+      throw error;
+    }
   },
 
   update: async (id: string, updates: Partial<MedicalRecord>) => {
@@ -285,17 +399,21 @@ export const medicalRecordService = {
     await batch.commit();
   },
 
-  // Función para administradores: borrar todo el historial
-  deleteAllRecords: async () => {
+  // Función para borrar todo el historial del usuario actual
+  deleteAllRecords: async (userId: string) => {
     try {
-      // Obtener todos los registros
-      const querySnapshot = await getDocs(collection(db, 'medicalRecords'));
+      // Obtener solo los registros del usuario actual
+      const q = query(
+        collection(db, 'medicalRecords'),
+        where('userId', '==', userId)
+      );
+      const querySnapshot = await getDocs(q);
       
       if (querySnapshot.empty) {
         return { deletedCount: 0, message: 'No hay registros para eliminar' };
       }
       
-      // Crear batch para eliminar todos los documentos
+      // Crear batch para eliminar todos los documentos del usuario
       const batch = writeBatch(db);
       
       querySnapshot.docs.forEach((doc) => {

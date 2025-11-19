@@ -7,6 +7,7 @@ import CreateRecord from './components/CreateRecord';
 import RecordHistory from './components/RecordHistory';
 import Trash from './components/Trash';
 import EditRecord from './components/EditRecord';
+import InvoiceManager from './components/InvoiceManager';
 import Header from './components/Header';
 
 import { useAutoCleanup } from './hooks/useAutoCleanup';
@@ -28,11 +29,46 @@ function AppContent() {
         <main className="container mx-auto px-4 py-8">
           <Routes>
             <Route path="/login" element={<Login />} />
-            <Route path="/" element={<PrivateRoute><CreateRecord /></PrivateRoute>} />
-            <Route path="/history" element={<PrivateRoute><RecordHistory /></PrivateRoute>} />
-            <Route path="/trash" element={<PrivateRoute><Trash /></PrivateRoute>} />
-            <Route path="/edit/:id" element={<PrivateRoute><EditRecord /></PrivateRoute>} />
-
+            <Route
+              path="/"
+              element={
+                <PrivateRoute>
+                  <CreateRecord />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/history"
+              element={
+                <PrivateRoute>
+                  <RecordHistory />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/invoices"
+              element={
+                <PrivateRoute>
+                  <InvoiceManager />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/trash"
+              element={
+                <PrivateRoute>
+                  <Trash />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/edit/:id"
+              element={
+                <PrivateRoute>
+                  <EditRecord />
+                </PrivateRoute>
+              }
+            />
           </Routes>
         </main>
       </div>

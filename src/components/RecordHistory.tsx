@@ -286,14 +286,14 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
 
 
   const deleteAllRecords = async () => {
-    if (!isAdmin) {
-      alert('❌ Solo los administradores pueden realizar esta acción.');
+    if (!user?.uid) {
+      alert('❌ No se pudo obtener la información del usuario.');
       return;
     }
 
     try {
       setDeletingAll(true);
-      const result = await medicalRecordService.deleteAllRecords();
+      const result = await medicalRecordService.deleteAllRecords(user.uid);
       alert(`✅ ${result.message}`);
       setShowDeleteAllModal(false);
       loadRecords(); // Recargar la lista
@@ -513,10 +513,17 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
                         <div className="w-10 h-10 bg-gradient-to-br from-pastel-blue to-pastel-blue-light rounded-lg flex items-center justify-center">
                           <User className="h-5 w-5 text-primary-700" />
                         </div>
-                        <div>
-                          <h3 className="text-lg font-semibold text-primary-700">
-                            {record.patientName} {record.patientSurname}
-                          </h3>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3">
+                            <h3 className="text-lg font-semibold text-primary-700">
+                              {record.patientName} {record.patientSurname}
+                            </h3>
+                            {record.recordNumber && (
+                              <span className="text-sm font-medium text-primary-600 bg-pastel-blue-light px-2 py-1 rounded-md">
+                                #{record.recordNumber}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-sm text-pastel-gray-dark">DNI: {record.patientDni}</p>
                         </div>
                       </div>
@@ -689,17 +696,20 @@ ${record.paid !== undefined ? `💳 **Pagado:** ${record.paid ? 'Sí' : 'No'}` :
             
             <div className="mb-6">
               <p className="text-gray-700 mb-4">
-                ¿Estás seguro de que quieres eliminar <strong>TODOS</strong> los registros del historial?
+                ¿Estás seguro de que quieres eliminar <strong>TODOS</strong> tus registros del historial?
               </p>
               <div className="bg-red-50 border border-red-200 rounded-xl p-4">
                 <p className="text-sm text-red-700 font-medium">
                   ⚠️ Esta acción es <strong>IRREVERSIBLE</strong> y eliminará permanentemente:
                 </p>
                 <ul className="text-sm text-red-600 mt-2 space-y-1">
-                  <li>• Todos los registros médicos</li>
-                  <li>• Todos los archivos subidos</li>
-                  <li>• Todo el historial de la aplicación</li>
+                  <li>• Todos <strong>tus</strong> registros médicos</li>
+                  <li>• Todos <strong>tus</strong> archivos subidos</li>
+                  <li>• Todo <strong>tu</strong> historial personal</li>
                 </ul>
+                <p className="text-xs text-red-500 mt-3 pt-3 border-t border-red-200">
+                  ℹ️ Solo se eliminarán los datos de tu cuenta. Los datos de otros usuarios no se verán afectados.
+                </p>
               </div>
             </div>
             

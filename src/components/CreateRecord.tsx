@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
@@ -44,10 +44,14 @@ const schema = yup
       .string()
       .oneOf(['Geneped', 'Medicaes'], 'Debe seleccionar un tipo de informe')
       .required('El tipo de informe es obligatorio'),
-    report: yup
-      .string()
-      .required('El informe clínico es obligatorio')
-      .min(10, 'El informe clínico debe tener al menos 10 caracteres'),
+    report: yup.string().when('$hasUploadedPDF', {
+      is: true,
+      then: schema => schema.optional().nullable(),
+      otherwise: schema =>
+        schema
+          .required('El informe clínico es obligatorio')
+          .min(10, 'El informe clínico debe tener al menos 10 caracteres'),
+    }),
     requestedTests: yup.string().optional().nullable(),
   })
   .required();
@@ -62,7 +66,6 @@ const CreateRecord: React.FC = () => {
   const [generatedPDF, setGeneratedPDF] = useState<File | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [uploadedPDF, setUploadedPDF] = useState<File | null>(null);
-  const [protectingPDF, setProtectingPDF] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isPDFDragOver, setIsPDFDragOver] = useState(false);
   const navigate = useNavigate();
@@ -74,9 +77,18 @@ const CreateRecord: React.FC = () => {
     formState: { errors },
     watch,
     setValue,
+    trigger,
   } = useForm<FormData>({
     resolver: yupResolver(schema),
+    context: {
+      hasUploadedPDF: !!uploadedPDF,
+    },
   });
+
+  // Re-validar el campo report cuando cambie uploadedPDF
+  useEffect(() => {
+    trigger('report');
+  }, [uploadedPDF, trigger]);
 
   // Función para manejar la carga de archivos
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -156,37 +168,6 @@ const CreateRecord: React.FC = () => {
     }
   };
 
-  // Función para proteger PDF subido
-  const protectUploadedPDF = async () => {
-    if (!uploadedPDF) return;
-
-    setProtectingPDF(true);
-    try {
-      const password = pdfService.generatePassword(
-        uploadedPDF.name.split('_')[0] || '12345678A'
-      );
-      const protectedPDF = await pdfService.generateProtectedPDFFromFile(
-        uploadedPDF,
-        password
-      );
-
-      // Descargar PDF protegido
-      pdfService.downloadPDF(protectedPDF);
-
-      alert(`✅ PDF protegido con contraseña: ${password}`);
-
-      // Mostrar alerta de confidencialidad
-      alert(
-        '⚠️ Por motivos de confidencialidad le recomendamos que elimine el archivo subido de su dispositivo.'
-      );
-    } catch (error) {
-      console.error('Error protegiendo PDF:', error);
-      alert('❌ Error al proteger el PDF. Por favor, inténtalo de nuevo.');
-    } finally {
-      setProtectingPDF(false);
-    }
-  };
-
   const onSubmit = async (data: FormData) => {
     console.log('=== INICIO onSubmit ===');
     console.log('Datos del formulario:', data);
@@ -263,21 +244,45 @@ const CreateRecord: React.FC = () => {
         recordData.uploadedDocuments = documentUrls;
       }
 
+      // Si hay un PDF subido, protegerlo y subirlo a Storage
+      if (uploadedPDF) {
+        console.log('Protegiendo y subiendo PDF...');
+        const password = pdfService.generatePassword(data.dni);
+        const protectedFile = await pdfService.generateProtectedPDFFromFile(
+          uploadedPDF,
+          password
+        );
+        const pdfUrl = await storageService.uploadFile(
+          protectedFile,
+          `documents/${patientId}/pdfs/${data.dni}_${Date.now()}.pdf`
+        );
+        recordData.pdfUrl = pdfUrl;
+        recordData.password = password;
+        // Si no hay report escrito, usar un placeholder
+        if (!data.report || !data.report.trim()) {
+          recordData.report = 'Informe clínico en formato PDF adjunto.';
+        }
+      }
+
       console.log('Datos del registro a crear:', recordData);
       console.log('Llamando a medicalRecordService.create...');
 
       const recordId = await medicalRecordService.create(recordData);
       console.log('Registro creado con ID:', recordId);
 
-      console.log('Generando PDF...');
-      await pdfService.generateProtectedPDF({
-        ...recordData,
-        id: recordId,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
       const password = recordData.password;
+
+      // Solo generar PDF si NO hay un PDF subido
+      if (!uploadedPDF) {
+        console.log('HTML del editor:', data.report);
+        console.log('Generando PDF...');
+        await pdfService.generateProtectedPDF({
+          ...recordData,
+          id: recordId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
       // No descargar automáticamente por razones de confidencialidad
       // pdfService.downloadPDF(pdfFile);
 
@@ -541,7 +546,8 @@ const CreateRecord: React.FC = () => {
             <div className="space-y-4">
               <p className="text-sm text-primary-600 mb-4">
                 Si ya tienes un PDF con la historia clínica, puedes subirlo
-                directamente para protegerlo con contraseña.
+                directamente. Se protegerá automáticamente con contraseña al
+                generar la historia.
               </p>
 
               {/* Área de carga de PDF */}
@@ -587,47 +593,26 @@ const CreateRecord: React.FC = () => {
 
               {/* PDF subido */}
               {uploadedPDF && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-pastel-gray-light">
-                    <div className="flex items-center space-x-3">
-                      <FileText className="h-4 w-4 text-primary-500" />
-                      <div>
-                        <p className="text-sm font-medium text-primary-700">
-                          {uploadedPDF.name}
-                        </p>
-                        <p className="text-xs text-primary-500">
-                          {(uploadedPDF.size / 1024 / 1024).toFixed(2)} MB
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        type="button"
-                        onClick={protectUploadedPDF}
-                        disabled={protectingPDF}
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-xl text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {protectingPDF ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                            Protegiendo...
-                          </>
-                        ) : (
-                          <>
-                            <Shield className="h-4 w-4 mr-2" />
-                            Proteger PDF
-                          </>
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={removeUploadedPDF}
-                        className="p-1 text-red-500 hover:text-red-700 transition-colors duration-200"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
+                <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-pastel-gray-light">
+                  <div className="flex items-center space-x-3 flex-1 min-w-0">
+                    <FileText className="h-4 w-4 text-primary-500 flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-primary-700 truncate">
+                        {uploadedPDF.name}
+                      </p>
+                      <p className="text-xs text-primary-500">
+                        {(uploadedPDF.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={removeUploadedPDF}
+                    className="ml-3 p-1 text-red-500 hover:text-red-700 transition-colors duration-200 flex-shrink-0"
+                    title="Eliminar PDF"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
               )}
             </div>

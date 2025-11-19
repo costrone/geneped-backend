@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Invoice, AuditLog } from '../types';
+import { Invoice } from '../types';
 import { cryptoService } from '../services/cryptoService';
 import { Shield, CheckCircle, AlertTriangle, FileText, Hash, Lock, Unlock } from 'lucide-react';
 

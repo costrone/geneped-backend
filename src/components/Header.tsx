@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
-import { FileText, LogOut, User, Trash2 } from 'lucide-react';
+import { FileText, LogOut, User, Trash2, Receipt } from 'lucide-react';
 
 const Header: React.FC = () => {
   const { user, signOut } = useUser();
@@ -20,7 +20,11 @@ const Header: React.FC = () => {
           <div className="flex items-center space-x-8">
             <Link to="/" className="flex items-center space-x-3 group">
               <div className="flex items-center justify-center">
-                <img src="/logo.png" alt="Geneped" className="w-40 h-40 object-contain" />
+                <img
+                  src="/logo.png"
+                  alt="Geneped"
+                  className="w-40 h-40 object-contain"
+                />
               </div>
             </Link>
 
@@ -48,6 +52,17 @@ const Header: React.FC = () => {
                 <span>Historial</span>
               </Link>
               <Link
+                to="/invoices"
+                className={`flex items-center space-x-2 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  location.pathname === '/invoices'
+                    ? 'bg-gradient-to-r from-pastel-blue to-pastel-blue-light text-primary-700 shadow-gentle'
+                    : 'text-pastel-gray-dark hover:text-primary-600 hover:bg-pastel-gray-light'
+                }`}
+              >
+                <Receipt className="h-4 w-4" />
+                <span>Facturas</span>
+              </Link>
+              <Link
                 to="/trash"
                 className={`flex items-center space-x-2 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                   location.pathname === '/trash'
@@ -58,7 +73,6 @@ const Header: React.FC = () => {
                 <Trash2 className="h-4 w-4" />
                 <span>Papelera</span>
               </Link>
-
             </nav>
           </div>
 
@@ -68,8 +82,12 @@ const Header: React.FC = () => {
                 <User className="h-4 w-4 text-primary-700" />
               </div>
               <div className="flex flex-col">
-                <span className="text-sm font-medium text-primary-700">{user.email}</span>
-                <span className="text-xs text-pastel-gray-dark">Administrador</span>
+                <span className="text-sm font-medium text-primary-700">
+                  {user.email}
+                </span>
+                <span className="text-xs text-pastel-gray-dark">
+                  Administrador
+                </span>
               </div>
             </div>
 
@@ -87,4 +105,4 @@ const Header: React.FC = () => {
   );
 };
 
-export default Header; 
+export default Header;

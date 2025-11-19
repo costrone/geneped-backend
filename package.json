@@ -31,6 +31,7 @@
     "@types/jest": "^27.5.2",
     "@types/jspdf": "^2.0.0",
     "@types/node": "^16.18.68",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^18.2.42",
     "@types/react-dom": "^18.2.17",
     "@types/react-router-dom": "^5.3.3",
@@ -41,6 +42,7 @@
     "lucide-react": "^0.294.0",
     "pdf-lib-with-encrypt": "^1.2.1",
     "postcss": "^8.4.32",
+    "qrcode": "^1.5.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.48.2",
@@ -54,13 +56,19 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "build:clean": "rm -rf build && npm run build",
+    "build:verify": "node scripts/verify-env.js && npm run build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "deploy": "npm run build && firebase deploy",
-    "deploy:hosting": "npm run build && firebase deploy --only hosting",
+    "verify:env": "node scripts/verify-env.js",
+    "deploy": "npm run build:verify && firebase deploy",
+    "deploy:hosting": "npm run build:verify && firebase deploy --only hosting",
+    "deploy:functions": "cd functions && npm run build && cd .. && firebase deploy --only functions",
     "deploy:firestore": "firebase deploy --only firestore:rules,firestore:indexes",
+    "deploy:all": "npm run build:verify && cd functions && npm run build && cd .. && firebase deploy",
     "firebase:login": "firebase login",
-    "firebase:init": "firebase init"
+    "firebase:init": "firebase init",
+    "firebase:use": "firebase use"
   },
   "eslintConfig": {
     "extends": [

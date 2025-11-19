@@ -722,10 +722,6 @@ class PDFService {
             const indentWidth = maxWidth - markerWidth;
 
             // Renderizar contenido del elemento de lista con indentación
-            const originalMargin = margin;
-            const originalMaxWidth = maxWidth;
-
-            // Renderizar con indentación
             const tokens = extractTokens(li, false, false);
             if (tokens.length > 0) {
               const normalized: TextToken[] = [];
